@@ -1,0 +1,57 @@
+# Built artifacts
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART virtual machine
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+
+# Gradle files
+.gradle/
+/local.properties
+/captures/
+.externalNativeBuild
+.cxx
+local.properties
+
+# Android Studio / IntelliJ files
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+.idea/navEditor.xml
+.idea/deploymentTargetSelector.xml
+.idea/deploymentTargetModes.xml
+.idea/modules.xml
+.idea/kotlinDoc.xml
+.idea/shelf/
+*.iml
+*.ipr
+*.iws
+
+# Log files
+*.log
+
+# macOS system files
+.DS_Store
+Thumbs.db
+
+# NDK/CMake build artifacts
+.cxx/
+obj/
+
+# Secrets / Config (Optional - uncomment if you want to hide Firebase config on public Git repos)
+# google-services.json
