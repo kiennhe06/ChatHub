@@ -1,6 +1,8 @@
 package fpl.ph60001.chathub.domain.repository
 
+import fpl.ph60001.chathub.domain.model.Conversation
 import fpl.ph60001.chathub.domain.model.Message
+import fpl.ph60001.chathub.domain.model.User
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -29,4 +31,20 @@ interface ChatRepository {
      * Tải ảnh chat lên Firebase Storage và trả về đường dẫn URL công khai.
      */
     suspend fun uploadChatImage(imageBytes: ByteArray, fileName: String): Result<String>
+
+    /**
+     * Lấy và lắng nghe luồng danh sách cuộc hội thoại thời gian thực của người dùng hiện tại.
+     */
+    fun getConversations(currentUserId: String): Flow<List<Conversation>>
+
+    /**
+     * Lấy hoặc tạo mới một phòng chat (cuộc hội thoại) giữa người dùng hiện tại và người bạn chat.
+     * Trả về mã phòng chat duy nhất (id).
+     */
+    suspend fun getOrCreateConversation(currentUserId: String, otherUserId: String): Result<String>
+
+    /**
+     * Tìm kiếm danh sách người dùng trên toàn hệ thống dựa theo từ khóa Tên hoặc Email.
+     */
+    suspend fun searchUsers(query: String): Result<List<User>>
 }

@@ -20,6 +20,8 @@ import fpl.ph60001.chathub.presentation.profile.ProfileScreen
 import fpl.ph60001.chathub.presentation.profile.ProfileViewModel
 import fpl.ph60001.chathub.presentation.register.RegisterScreen
 import fpl.ph60001.chathub.presentation.register.RegisterViewModel
+import fpl.ph60001.chathub.presentation.search.SearchScreen
+import fpl.ph60001.chathub.presentation.search.SearchViewModel
 import fpl.ph60001.chathub.presentation.splash.SplashScreen
 import fpl.ph60001.chathub.presentation.splash.SplashViewModel
 
@@ -113,6 +115,9 @@ fun NavGraph(
                 onNavigateToProfile = {
                     navController.navigate(Screen.Profile.route)
                 },
+                onNavigateToSearch = {
+                    navController.navigate(Screen.Search.route)
+                },
                 onNavigateToLogin = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.Home.route) { inclusive = true }
@@ -134,6 +139,22 @@ fun NavGraph(
                 viewModel = chatViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        // Màn hình Tìm kiếm người dùng (Search Screen)
+        composable(route = Screen.Search.route) {
+            val searchViewModel: SearchViewModel = hiltViewModel()
+            SearchScreen(
+                viewModel = searchViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToChat = { partnerId, partnerName ->
+                    navController.navigate(Screen.Chat.createRoute(partnerId, partnerName)) {
+                        popUpTo(Screen.Search.route) { inclusive = true }
+                    }
                 }
             )
         }

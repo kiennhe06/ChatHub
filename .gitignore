@@ -25,19 +25,7 @@ build/
 local.properties
 
 # Android Studio / IntelliJ files
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/gradle.xml
-.idea/assetWizardSettings.xml
-.idea/dictionaries
-.idea/libraries
-.idea/caches
-.idea/navEditor.xml
-.idea/deploymentTargetSelector.xml
-.idea/deploymentTargetModes.xml
-.idea/modules.xml
-.idea/kotlinDoc.xml
-.idea/shelf/
+.idea/
 *.iml
 *.ipr
 *.iws
@@ -55,3 +43,6 @@ obj/
 
 # Secrets / Config (Optional - uncomment if you want to hide Firebase config on public Git repos)
 # google-services.json
+# Firebase
+app/google-services.json
+google-services.json

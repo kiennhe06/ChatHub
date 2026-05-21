@@ -3,13 +3,18 @@ package fpl.ph60001.chathub.data.repository
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
+import fpl.ph60001.chathub.data.model.ConversationDto
 import fpl.ph60001.chathub.data.model.MessageDto
+import fpl.ph60001.chathub.data.model.UserDto
+import fpl.ph60001.chathub.domain.model.Conversation
 import fpl.ph60001.chathub.domain.model.Message
+import fpl.ph60001.chathub.domain.model.User
 import fpl.ph60001.chathub.domain.repository.ChatRepository
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
@@ -59,6 +64,17 @@ class ChatRepositoryImpl @Inject constructor(
                 .set(MessageDto.fromDomain(message))
                 .await()
             
+            // Cập nhật tin nhắn cuối cùng trong phòng chat tương ứng
+            val updateData = mapOf(
+                "lastMessage" to if (imageUrl.isNotEmpty()) "[Hình ảnh]" else content,
+                "lastMessageTime" to timestamp,
+                "unreadCount" to 0
+            )
+            firestore.collection("conversations")
+                .document(roomKey)
+                .update(updateData)
+                .await()
+            
             Result.success(Unit)
         } catch (e: Exception) {
             // Chế độ demo dự phòng: lưu vào bộ nhớ tạm local
@@ -75,8 +91,6 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override fun getMessages(chatPartnerId: String): Flow<List<Message>> = callbackFlow {
-        // Chúng ta giả định rằng người dùng hiện tại là người gửi chính
-        // (Trong ViewModel thực tế, chúng ta sẽ cung cấp ID người dùng đang login)
         val currentUserId = "demo_user_uid" 
         val roomKey = getRoomKey(currentUserId, chatPartnerId)
 
@@ -97,7 +111,6 @@ class ChatRepositoryImpl @Inject constructor(
                 } ?: emptyList()
                 
                 if (messages.isEmpty()) {
-                    // Nếu Firebase trống, trả về danh sách demo
                     val list = demoMessagesMap.getOrPut(roomKey) { getInitialMockMessages(currentUserId, chatPartnerId) }
                     trySend(list.toList())
                 } else {
@@ -115,9 +128,88 @@ class ChatRepositoryImpl @Inject constructor(
             val downloadUrl = storageRef.downloadUrl.await()
             Result.success(downloadUrl.toString())
         } catch (e: Exception) {
-            // Demo fallback: Trả về link ảnh Unsplash ngẫu nhiên cực đẹp
             delay(1000)
             Result.success("https://images.unsplash.com/photo-1579202673506-ca3ce28943ef?auto=format&fit=crop&w=400&q=80")
+        }
+    }
+
+    override fun getConversations(currentUserId: String): Flow<List<Conversation>> = callbackFlow {
+        val listener = firestore.collection("conversations")
+            .whereArrayContains("members", currentUserId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    // Fallback to mock data
+                    trySend(getInitialMockConversations(currentUserId))
+                    return@addSnapshotListener
+                }
+                
+                val conversationsDto = snapshot?.documents?.mapNotNull { doc ->
+                    doc.toObject(ConversationDto::class.java)?.copy(id = doc.id)
+                } ?: emptyList()
+
+                if (conversationsDto.isEmpty()) {
+                    trySend(getInitialMockConversations(currentUserId))
+                } else {
+                    launch {
+                        val conversations = conversationsDto.map { dto ->
+                            val partnerId = dto.members.find { it != currentUserId } ?: ""
+                            val partnerUser = try {
+                                if (partnerId.isNotEmpty()) {
+                                    val userSnapshot = firestore.collection("users").document(partnerId).get().await()
+                                    userSnapshot.toObject(UserDto::class.java)?.toDomain()
+                                } else null
+                            } catch (e: Exception) {
+                                null
+                            }
+                            dto.toDomain(currentUserId, partnerUser)
+                        }
+                        trySend(conversations.sortedByDescending { it.lastMessageTime })
+                    }
+                }
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override suspend fun getOrCreateConversation(currentUserId: String, otherUserId: String): Result<String> {
+        val roomKey = getRoomKey(currentUserId, otherUserId)
+        return try {
+            val doc = firestore.collection("conversations").document(roomKey).get().await()
+            if (!doc.exists()) {
+                val newConv = ConversationDto(
+                    id = roomKey,
+                    members = listOf(currentUserId, otherUserId),
+                    lastMessage = "Bắt đầu cuộc trò chuyện mới!",
+                    lastMessageTime = System.currentTimeMillis(),
+                    unreadCount = 0
+                )
+                firestore.collection("conversations").document(roomKey).set(newConv).await()
+            }
+            Result.success(roomKey)
+        } catch (e: Exception) {
+            Result.success(roomKey)
+        }
+    }
+
+    override suspend fun searchUsers(query: String): Result<List<User>> {
+        return try {
+            val snapshot = firestore.collection("users").get().await()
+            val allUsers = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(UserDto::class.java)?.toDomain()
+            }
+            val filtered = allUsers.filter { user ->
+                user.displayName.contains(query, ignoreCase = true) ||
+                user.email.contains(query, ignoreCase = true)
+            }
+            Result.success(filtered)
+        } catch (e: Exception) {
+            delay(500)
+            val allMockUsers = getMockUsers()
+            val filtered = allMockUsers.filter { user ->
+                user.displayName.contains(query, ignoreCase = true) ||
+                user.email.contains(query, ignoreCase = true)
+            }
+            Result.success(filtered)
         }
     }
 
@@ -145,7 +237,7 @@ class ChatRepositoryImpl @Inject constructor(
 
         val botMessage = Message(
             messageId = UUID.randomUUID().toString(),
-            senderId = receiverId, // Đối phương gửi lại
+            senderId = receiverId, 
             senderName = "Người chat",
             receiverId = senderId,
             content = replyContent,
@@ -153,6 +245,94 @@ class ChatRepositoryImpl @Inject constructor(
             isRead = false
         )
         list.add(botMessage)
+    }
+
+    // Khởi tạo danh sách các cuộc trò chuyện demo cho HomeScreen
+    private fun getInitialMockConversations(currentUserId: String): List<Conversation> {
+        val mockUsers = getMockUsers()
+        return listOf(
+            Conversation(
+                id = getRoomKey(currentUserId, "demo_partner_1"),
+                members = listOf(currentUserId, "demo_partner_1"),
+                lastMessage = "Wow tuyệt vời quá! Hiệu ứng mượt mà và giao diện màu xanh dương nhìn sang trọng cực kỳ luôn á! 😍",
+                lastMessageTime = System.currentTimeMillis() - 1800000, // 30 phút trước
+                unreadCount = 2,
+                partnerId = "demo_partner_1",
+                partnerName = mockUsers[0].displayName,
+                partnerAvatar = mockUsers[0].photoUrl,
+                partnerOnline = mockUsers[0].isOnline
+            ),
+            Conversation(
+                id = getRoomKey(currentUserId, "demo_partner_2"),
+                members = listOf(currentUserId, "demo_partner_2"),
+                lastMessage = "Cảm ơn bạn nhiều nhé! Lát rảnh mình gọi lại sau nha.",
+                lastMessageTime = System.currentTimeMillis() - 7200000, // 2 giờ trước
+                unreadCount = 0,
+                partnerId = "demo_partner_2",
+                partnerName = mockUsers[1].displayName,
+                partnerAvatar = mockUsers[1].photoUrl,
+                partnerOnline = mockUsers[1].isOnline
+            ),
+            Conversation(
+                id = getRoomKey(currentUserId, "demo_partner_3"),
+                members = listOf(currentUserId, "demo_partner_3"),
+                lastMessage = "Giao diện ChatHub mới đỉnh thực sự luôn á, mượt mà lắm!",
+                lastMessageTime = System.currentTimeMillis() - 86400000, // 1 ngày trước
+                unreadCount = 0,
+                partnerId = "demo_partner_3",
+                partnerName = mockUsers[2].displayName,
+                partnerAvatar = mockUsers[2].photoUrl,
+                partnerOnline = mockUsers[2].isOnline
+            ),
+            Conversation(
+                id = getRoomKey(currentUserId, "demo_partner_4"),
+                members = listOf(currentUserId, "demo_partner_4"),
+                lastMessage = "Chào bạn! Rất vui được kết nối trên ứng dụng mới.",
+                lastMessageTime = System.currentTimeMillis() - 86400000 * 2, // 2 ngày trước
+                unreadCount = 0,
+                partnerId = "demo_partner_4",
+                partnerName = mockUsers[3].displayName,
+                partnerAvatar = mockUsers[3].photoUrl,
+                partnerOnline = mockUsers[3].isOnline
+            )
+        )
+    }
+
+    private fun getMockUsers(): List<User> {
+        return listOf(
+            User(
+                uid = "demo_partner_1",
+                email = "lananh@gmail.com",
+                displayName = "Nguyễn Lân Anh",
+                photoUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
+                isOnline = true,
+                lastActiveTimestamp = System.currentTimeMillis()
+            ),
+            User(
+                uid = "demo_partner_2",
+                email = "hoangnam@gmail.com",
+                displayName = "Trần Hoàng Nam",
+                photoUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+                isOnline = false,
+                lastActiveTimestamp = System.currentTimeMillis() - 3600000
+            ),
+            User(
+                uid = "demo_partner_3",
+                email = "thuylinh@gmail.com",
+                displayName = "Phạm Thùy Linh",
+                photoUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+                isOnline = true,
+                lastActiveTimestamp = System.currentTimeMillis()
+            ),
+            User(
+                uid = "demo_partner_4",
+                email = "quocanh@gmail.com",
+                displayName = "Lê Quốc Anh",
+                photoUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
+                isOnline = false,
+                lastActiveTimestamp = System.currentTimeMillis() - 86400000
+            )
+        )
     }
 
     // Khởi tạo các tin nhắn demo chào mừng có sẵn trong phòng chat cho đẹp mắt
