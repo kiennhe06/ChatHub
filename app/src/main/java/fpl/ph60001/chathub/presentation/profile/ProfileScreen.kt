@@ -1,13 +1,19 @@
 package fpl.ph60001.chathub.presentation.profile
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,7 +34,7 @@ import kotlinx.coroutines.delay
 
 /**
  * Giao diện quản lý thông tin tài khoản người dùng (ProfileScreen).
- * Cho phép người dùng chỉnh sửa tên hiển thị và cập nhật liên kết ảnh đại diện avatar.
+ * Cho phép người dùng chỉnh sửa tên hiển thị và nhấn vào Avatar để chọn ảnh từ máy/thư viện và tải lên cực chuyên nghiệp.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,14 +47,13 @@ fun ProfileScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val successMessage by viewModel.successMessage.collectAsState()
 
+    val context = LocalContext.current
     var nameInput by remember { mutableStateOf("") }
-    var photoUrlInput by remember { mutableStateOf("") }
 
-    // Đồng bộ hóa trạng thái cục bộ khi thông tin người dùng được tải về
+    // Đồng bộ hóa trạng thái Họ và Tên khi thông tin người dùng được tải về
     LaunchedEffect(user) {
         user?.let {
             nameInput = it.displayName
-            photoUrlInput = it.photoUrl
         }
     }
 
@@ -56,6 +62,24 @@ fun ProfileScreen(
         if (successMessage != null || errorMessage != null) {
             delay(3000)
             viewModel.clearMessages()
+        }
+    }
+
+    // Đăng ký Launcher để chọn ảnh từ thiết bị
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedUri ->
+            try {
+                val inputStream = context.contentResolver.openInputStream(selectedUri)
+                val bytes = inputStream?.readBytes()
+                inputStream?.close()
+                if (bytes != null) {
+                    viewModel.uploadAvatar(bytes)
+                }
+            } catch (e: Exception) {
+                // Xử lý lỗi nếu có khi đọc tệp tin
+            }
         }
     }
 
@@ -82,29 +106,51 @@ fun ProfileScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Khung Avatar kích thước lớn bo tròn hiện đại
+            // Khung Avatar lớn, có thể nhấn để chọn ảnh + Biểu tượng camera đè lên mờ ảo
             Box(
                 modifier = Modifier
-                    .size(120.dp)
+                    .size(130.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
+                    .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
+                    .clickable(enabled = !isLoading) {
+                        imagePickerLauncher.launch("image/*")
+                    },
+                contentAlignment = Alignment.BottomCenter
             ) {
+                // Ảnh Avatar chính
                 AsyncImage(
-                    model = photoUrlInput.ifEmpty { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80" },
+                    model = user?.photoUrl?.ifEmpty { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80" }
+                        ?: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80",
                     contentDescription = "Avatar của tôi",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+
+                // Lớp mờ hình camera báo hiệu có thể thay đổi
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = "Chọn ảnh",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Email tĩnh không thể chỉnh sửa
+            // Email tĩnh của tài khoản
             Text(
                 text = user?.email ?: "",
                 fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                fontWeight = FontWeight.Medium
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -123,20 +169,6 @@ fun ProfileScreen(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            // Ô nhập liên kết ảnh đại diện Avatar mới
-            OutlinedTextField(
-                value = photoUrlInput,
-                onValueChange = { photoUrlInput = it },
-                label = { Text("Đường dẫn ảnh đại diện (URL)") },
-                leadingIcon = {
-                    Icon(imageVector = Icons.Default.Email, contentDescription = "Avatar Link Icon")
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Nhập link ảnh (https://...)") }
-            )
 
             // Hiển thị thông báo lỗi tiếng Việt
             AnimatedVisibility(visible = errorMessage != null) {
@@ -164,11 +196,11 @@ fun ProfileScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Nút Lưu thay đổi Gradient bo góc cực sang trọng
             Button(
-                onClick = { viewModel.updateProfile(nameInput, photoUrlInput) },
+                onClick = { viewModel.updateProfile(nameInput, user?.photoUrl ?: "") },
                 enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()

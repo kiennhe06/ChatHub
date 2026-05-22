@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fpl.ph60001.chathub.domain.model.User
 import fpl.ph60001.chathub.domain.repository.AuthRepository
+import fpl.ph60001.chathub.domain.repository.ChatRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,11 +13,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Lớp ViewModel quản lý hồ sơ thông tin cá nhân của người dùng và cập nhật lên Firebase (ProfileScreen).
+ * Lớp ViewModel quản lý hồ sơ thông tin cá nhân của người dùng, tải ảnh đại diện lên Firebase Storage
+ * và cập nhật thông tin cá nhân đồng bộ thời gian thực (ProfileScreen).
  */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val chatRepository: ChatRepository
 ) : ViewModel() {
 
     // Người dùng hiện tại
@@ -48,6 +51,33 @@ class ProfileViewModel @Inject constructor(
                 if (updatedUser != null) {
                     _user.value = updatedUser
                 }
+            }
+        }
+    }
+
+    /**
+     * Tải tệp ảnh đại diện lên Firebase Storage và tự động lưu thay đổi.
+     */
+    fun uploadAvatar(imageBytes: ByteArray) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            _successMessage.value = null
+
+            val uid = authRepository.getCurrentUser()?.uid ?: "user"
+            val fileName = "${uid}_avatar_${System.currentTimeMillis()}.jpg"
+            
+            val result = chatRepository.uploadChatImage(imageBytes, fileName)
+            
+            _isLoading.value = false
+            result.onSuccess { downloadUrl ->
+                // Cập nhật trường photoUrl của user nội bộ trước
+                _user.value = _user.value?.copy(photoUrl = downloadUrl)
+                // Lưu luôn lên máy chủ Auth/Firestore để đồng bộ mượt mà!
+                updateProfile(_user.value?.displayName ?: "", downloadUrl)
+            }
+            result.onFailure { error ->
+                _errorMessage.value = error.localizedMessage ?: "Lỗi khi tải ảnh đại diện lên Storage"
             }
         }
     }

@@ -3,6 +3,7 @@ package fpl.ph60001.chathub.presentation.register
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fpl.ph60001.chathub.domain.repository.AuthRepository
 import fpl.ph60001.chathub.domain.usecase.RegisterUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +16,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
-    private val registerUseCase: RegisterUseCase
+    private val registerUseCase: RegisterUseCase,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     // Trạng thái Tên hiển thị
@@ -67,7 +69,7 @@ class RegisterViewModel @Inject constructor(
     }
 
     /**
-     * Thực hiện đăng ký tài khoản mới.
+     * Thực hiện đăng ký tài khoản mới và đăng xuất ngay để bắt đăng nhập lại.
      */
     fun register() {
         val currentName = _displayName.value.trim()
@@ -82,6 +84,10 @@ class RegisterViewModel @Inject constructor(
         }
         if (currentEmail.isEmpty()) {
             _errorMessage.value = "Vui lòng nhập địa chỉ email!"
+            return
+        }
+        if (currentEmail.contains(" ") || !android.util.Patterns.EMAIL_ADDRESS.matcher(currentEmail).matches()) {
+            _errorMessage.value = "Định dạng email không hợp lệ!"
             return
         }
         if (currentPassword.isEmpty()) {
@@ -105,6 +111,8 @@ class RegisterViewModel @Inject constructor(
             
             _isLoading.value = false
             result.onSuccess {
+                // Đăng xuất ngay lập tức để không tự động đăng nhập vào Home, bắt người dùng phải đăng nhập lại
+                authRepository.logout()
                 _isRegisterSuccess.value = true
             }
             result.onFailure { exception ->

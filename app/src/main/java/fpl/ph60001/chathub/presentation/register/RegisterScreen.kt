@@ -58,9 +58,15 @@ fun RegisterScreen(
 
     val scrollState = rememberScrollState()
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(isRegisterSuccess) {
         if (isRegisterSuccess) {
-            onNavigateToHome()
+            android.widget.Toast.makeText(
+                context,
+                "Đăng ký tài khoản thành công! Vui lòng đăng nhập lại.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            onNavigateToLogin()
             viewModel.resetSuccessState()
         }
     }
