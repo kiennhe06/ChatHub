@@ -33,6 +33,7 @@ import fpl.ph60001.chathub.domain.model.User
 private val GlassCard = Color(0x331E293B)       // Thẻ gương mờ
 private val GlassBorder = Color(0x3364D2FF)     // Viền gương phát sáng Neon
 private val NeonBlue = Color(0xFF64D2FF)        // Xanh Neon chủ đạo
+private val NeonCyan = Color(0xFF00F2FE)        // Xanh Cyan
 
 /**
  * Màn hình tìm kiếm người dùng (SearchScreen) phong cách Premium Glassmorphism tuyệt đẹp.
@@ -46,6 +47,9 @@ fun SearchScreen(
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
+    val friendsList by viewModel.friendsList.collectAsState()
+    val incomingRequests by viewModel.incomingRequests.collectAsState()
+    val outgoingRequests by viewModel.outgoingRequests.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
 
@@ -234,11 +238,25 @@ fun SearchScreen(
                             }
                         } else {
                             items(searchResults) { user ->
+                                val isFriend = friendsList.any { it.uid == user.uid }
+                                val hasOutgoing = outgoingRequests.any { it.receiverId == user.uid }
+                                val hasIncoming = incomingRequests.any { it.senderId == user.uid }
+                                
                                 GlassSearchResultItem(
                                     user = user,
+                                    isFriend = isFriend,
+                                    hasOutgoing = hasOutgoing,
+                                    hasIncoming = hasIncoming,
+                                    onFriendClick = { viewModel.handleFriendAction(user.uid) },
                                     onClick = {
-                                        viewModel.startConversation(user.uid) { roomId ->
-                                            onNavigateToChat(user.uid, user.displayName)
+                                        // Chỉ cho phép chat trực tiếp nếu đã là bạn bè!
+                                        if (isFriend) {
+                                            viewModel.startConversation(user.uid) { roomId ->
+                                                onNavigateToChat(user.uid, user.displayName)
+                                            }
+                                        } else {
+                                            // Nếu chưa là bạn bè, click vào item sẽ thực hiện gửi/chấp nhận lời mời kết bạn cực trực quan!
+                                            viewModel.handleFriendAction(user.uid)
                                         }
                                     }
                                 )
@@ -252,11 +270,15 @@ fun SearchScreen(
 }
 
 /**
- * Item hiển thị kết quả tìm kiếm phong cách Glassmorphism (GlassSearchResultItem).
+ * Item hiển thị kết quả tìm kiếm phong cách Glassmorphism (GlassSearchResultItem) với nút kết bạn.
  */
 @Composable
 fun GlassSearchResultItem(
     user: User,
+    isFriend: Boolean,
+    hasOutgoing: Boolean,
+    hasIncoming: Boolean,
+    onFriendClick: () -> Unit,
     onClick: () -> Unit
 ) {
     Card(
@@ -307,6 +329,52 @@ fun GlassSearchResultItem(
                     color = Color.White.copy(alpha = 0.5f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Nút Kết bạn / Chấp nhận / Đã gửi Glassmorphism
+            val buttonColor = when {
+                isFriend -> Color(0x334ADE80)
+                hasOutgoing -> Color(0x1A64D2FF)
+                hasIncoming -> Color(0xFF64D2FF)
+                else -> Color(0x1AFFFFFF)
+            }
+            val contentColor = when {
+                isFriend -> Color(0xFF4ADE80)
+                hasOutgoing -> Color(0xFF64D2FF)
+                hasIncoming -> Color.Black
+                else -> Color.White
+            }
+            val borderClr = when {
+                isFriend -> Color(0x664ADE80)
+                hasOutgoing -> Color(0x6664D2FF)
+                hasIncoming -> Color.Transparent
+                else -> Color.White.copy(alpha = 0.2f)
+            }
+            val buttonText = when {
+                isFriend -> "Bạn bè ✓"
+                hasOutgoing -> "Đã gửi ✓"
+                hasIncoming -> "Chấp nhận"
+                else -> "+ Kết bạn"
+            }
+
+            Button(
+                onClick = onFriendClick,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = buttonColor,
+                    contentColor = contentColor
+                ),
+                border = BorderStroke(1.dp, borderClr),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.height(34.dp)
+            ) {
+                Text(
+                    text = buttonText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

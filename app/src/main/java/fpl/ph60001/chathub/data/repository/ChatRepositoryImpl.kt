@@ -4,9 +4,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import fpl.ph60001.chathub.data.model.ConversationDto
+import fpl.ph60001.chathub.data.model.FriendRequestDto
 import fpl.ph60001.chathub.data.model.MessageDto
 import fpl.ph60001.chathub.data.model.UserDto
 import fpl.ph60001.chathub.domain.model.Conversation
+import fpl.ph60001.chathub.domain.model.FriendRequest
 import fpl.ph60001.chathub.domain.model.Message
 import fpl.ph60001.chathub.domain.model.User
 import fpl.ph60001.chathub.domain.repository.ChatRepository
@@ -31,6 +33,22 @@ class ChatRepositoryImpl @Inject constructor(
 
     // Danh sách lưu trữ tạm thời tin nhắn trong Chế độ Demo
     private val demoMessagesMap = mutableMapOf<String, MutableList<Message>>()
+    
+    // Danh sách bạn bè demo phục vụ cho offline fallback (Ban đầu Linh là người gửi yêu cầu nên không nằm trong đây)
+    private val mockFriendsList = mutableListOf("demo_partner_1", "demo_partner_2", "demo_partner_4")
+
+    // Danh sách yêu cầu kết bạn demo phục vụ cho offline fallback
+    private val mockFriendRequests = mutableListOf(
+        FriendRequest(
+            id = "demo_partner_3_demo_user_uid",
+            senderId = "demo_partner_3",
+            senderName = "Phạm Thùy Linh",
+            senderAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+            receiverId = "demo_user_uid",
+            timestamp = System.currentTimeMillis() - 600000,
+            status = "PENDING"
+        )
+    )
 
     override suspend fun sendMessage(
         senderId: String,
@@ -80,11 +98,6 @@ class ChatRepositoryImpl @Inject constructor(
             // Chế độ demo dự phòng: lưu vào bộ nhớ tạm local
             val list = demoMessagesMap.getOrPut(roomKey) { getInitialMockMessages(senderId, receiverId) }
             list.add(message)
-            
-            // Giả lập bot phản hồi thông minh tự động sau 1.5 giây để demo thêm sinh động
-            if (imageUrl.isEmpty()) {
-                simulateBotReply(roomKey, senderId, receiverId, content)
-            }
             
             Result.success(Unit)
         }
@@ -371,5 +384,181 @@ class ChatRepositoryImpl @Inject constructor(
                 timestamp = System.currentTimeMillis() - 1800000 // 30 phút trước
             )
         )
+    }
+
+    override suspend fun addFriend(currentUserId: String, friendId: String): Result<Unit> {
+        return try {
+            firestore.collection("users").document(currentUserId)
+                .update("friends", com.google.firebase.firestore.FieldValue.arrayUnion(friendId))
+                .await()
+            firestore.collection("users").document(friendId)
+                .update("friends", com.google.firebase.firestore.FieldValue.arrayUnion(currentUserId))
+                .await()
+            
+            // Đồng thời khởi tạo cuộc hội thoại mới giữa họ cho tiện
+            getOrCreateConversation(currentUserId, friendId)
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (!mockFriendsList.contains(friendId)) {
+                mockFriendsList.add(friendId)
+            }
+            Result.success(Unit)
+        }
+    }
+
+    override suspend fun removeFriend(currentUserId: String, friendId: String): Result<Unit> {
+        return try {
+            firestore.collection("users").document(currentUserId)
+                .update("friends", com.google.firebase.firestore.FieldValue.arrayRemove(friendId))
+                .await()
+            firestore.collection("users").document(friendId)
+                .update("friends", com.google.firebase.firestore.FieldValue.arrayRemove(currentUserId))
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            mockFriendsList.remove(friendId)
+            Result.success(Unit)
+        }
+    }
+
+    override fun getFriends(currentUserId: String): Flow<List<User>> = callbackFlow {
+        val listener = firestore.collection("users")
+            .document(currentUserId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) {
+                    trySend(getMockFriends())
+                    return@addSnapshotListener
+                }
+
+                val friendIds = snapshot.toObject(UserDto::class.java)?.friends ?: emptyList()
+                if (friendIds.isEmpty()) {
+                    trySend(getMockFriends())
+                } else {
+                    launch {
+                        try {
+                            val friendsList = friendIds.mapNotNull { friendId ->
+                                val userDoc = firestore.collection("users").document(friendId).get().await()
+                                userDoc.toObject(UserDto::class.java)?.toDomain()
+                            }
+                            val mergedList = (friendsList + getMockFriends()).distinctBy { it.uid }
+                            trySend(mergedList)
+                        } catch (e: Exception) {
+                            trySend(getMockFriends())
+                        }
+                    }
+                }
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    private fun getMockFriends(): List<User> {
+        val allMock = getMockUsers()
+        return allMock.filter { mockFriendsList.contains(it.uid) }
+    }
+
+    override suspend fun sendFriendRequest(
+        senderId: String,
+        senderName: String,
+        senderAvatar: String,
+        receiverId: String
+    ): Result<Unit> {
+        val requestId = "${senderId}_${receiverId}"
+        val request = FriendRequest(
+            id = requestId,
+            senderId = senderId,
+            senderName = senderName,
+            senderAvatar = senderAvatar,
+            receiverId = receiverId,
+            timestamp = System.currentTimeMillis(),
+            status = "PENDING"
+        )
+        return try {
+            firestore.collection("friend_requests")
+                .document(requestId)
+                .set(FriendRequestDto.fromDomain(request))
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (!mockFriendRequests.any { it.id == requestId }) {
+                mockFriendRequests.add(request)
+            }
+            Result.success(Unit)
+        }
+    }
+
+    override suspend fun acceptFriendRequest(
+        requestId: String,
+        currentUserId: String,
+        senderId: String
+    ): Result<Unit> {
+        return try {
+            firestore.collection("friend_requests").document(requestId).delete().await()
+            addFriend(currentUserId, senderId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            mockFriendRequests.removeAll { it.id == requestId }
+            addFriend(currentUserId, senderId)
+            Result.success(Unit)
+        }
+    }
+
+    override suspend fun declineFriendRequest(requestId: String): Result<Unit> {
+        return try {
+            firestore.collection("friend_requests").document(requestId).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            mockFriendRequests.removeAll { it.id == requestId }
+            Result.success(Unit)
+        }
+    }
+
+    override fun getIncomingFriendRequests(currentUserId: String): Flow<List<FriendRequest>> = callbackFlow {
+        val listener = firestore.collection("friend_requests")
+            .whereEqualTo("receiverId", currentUserId)
+            .whereEqualTo("status", "PENDING")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    trySend(mockFriendRequests.filter { it.receiverId == currentUserId && it.status == "PENDING" })
+                    return@addSnapshotListener
+                }
+
+                val list = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(FriendRequestDto::class.java)?.toDomain()
+                }
+                
+                if (list.isEmpty()) {
+                    trySend(mockFriendRequests.filter { it.receiverId == currentUserId && it.status == "PENDING" })
+                } else {
+                    trySend(list)
+                }
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override fun getOutgoingFriendRequests(currentUserId: String): Flow<List<FriendRequest>> = callbackFlow {
+        val listener = firestore.collection("friend_requests")
+            .whereEqualTo("senderId", currentUserId)
+            .whereEqualTo("status", "PENDING")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    trySend(mockFriendRequests.filter { it.senderId == currentUserId && it.status == "PENDING" })
+                    return@addSnapshotListener
+                }
+
+                val list = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(FriendRequestDto::class.java)?.toDomain()
+                }
+                
+                if (list.isEmpty()) {
+                    trySend(mockFriendRequests.filter { it.senderId == currentUserId && it.status == "PENDING" })
+                } else {
+                    trySend(list)
+                }
+            }
+
+        awaitClose { listener.remove() }
     }
 }

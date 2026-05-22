@@ -10,8 +10,10 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import fpl.ph60001.chathub.data.repository.AuthRepositoryImpl
 import fpl.ph60001.chathub.data.repository.ChatRepositoryImpl
+import fpl.ph60001.chathub.data.repository.MessageRepositoryImpl
 import fpl.ph60001.chathub.domain.repository.AuthRepository
 import fpl.ph60001.chathub.domain.repository.ChatRepository
+import fpl.ph60001.chathub.domain.repository.MessageRepository
 import javax.inject.Singleton
 
 /**
@@ -70,5 +72,14 @@ object AppModule {
         storage: FirebaseStorage
     ): ChatRepository {
         return ChatRepositoryImpl(firestore, storage)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMessageRepository(
+        firestore: FirebaseFirestore,
+        storage: FirebaseStorage
+    ): MessageRepository {
+        return MessageRepositoryImpl(firestore, storage)
     }
 }

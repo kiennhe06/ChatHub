@@ -1,6 +1,26 @@
 package fpl.ph60001.chathub.data.model
 
 import fpl.ph60001.chathub.domain.model.Message
+import fpl.ph60001.chathub.domain.model.ReplyTo
+
+/**
+ * Đối tượng DTO lưu trữ thông tin Reply của tin nhắn để làm việc với Firestore.
+ */
+data class ReplyToDto(
+    val id: String = "",
+    val content: String = ""
+) {
+    fun toDomain(): ReplyTo {
+        return ReplyTo(id = id, content = content)
+    }
+
+    companion object {
+        fun fromDomain(domain: ReplyTo?): ReplyToDto? {
+            if (domain == null) return null
+            return ReplyToDto(id = domain.id, content = domain.content)
+        }
+    }
+}
 
 /**
  * Đối tượng truyền dữ liệu (DTO) của Tin nhắn dùng cho tương tác với Firestore.
@@ -14,7 +34,15 @@ data class MessageDto(
     val timestamp: Long = 0L,
     val imageUrl: String = "",
     @field:JvmField // Đảm bảo Firestore đọc đúng thuộc tính Boolean kiểu isRead
-    val isRead: Boolean = false
+    val isRead: Boolean = false,
+    val type: String = "text",
+    val seenBy: List<String> = emptyList(),
+    val replyTo: ReplyToDto? = null,
+    val reactions: Map<String, String> = emptyMap(),
+    @field:JvmField
+    val isDeleted: Boolean = false,
+    @field:JvmField
+    val isEdited: Boolean = false
 ) {
     /**
      * Chuyển đổi DTO thành Business Model trong lớp Domain.
@@ -28,7 +56,13 @@ data class MessageDto(
             content = content,
             timestamp = timestamp,
             imageUrl = imageUrl,
-            isRead = isRead
+            isRead = isRead,
+            type = type,
+            seenBy = seenBy,
+            replyTo = replyTo?.toDomain(),
+            reactions = reactions,
+            isDeleted = isDeleted,
+            isEdited = isEdited
         )
     }
 
@@ -45,7 +79,13 @@ data class MessageDto(
                 content = message.content,
                 timestamp = message.timestamp,
                 imageUrl = message.imageUrl,
-                isRead = message.isRead
+                isRead = message.isRead,
+                type = message.type,
+                seenBy = message.seenBy,
+                replyTo = ReplyToDto.fromDomain(message.replyTo),
+                reactions = message.reactions,
+                isDeleted = message.isDeleted,
+                isEdited = message.isEdited
             )
         }
     }

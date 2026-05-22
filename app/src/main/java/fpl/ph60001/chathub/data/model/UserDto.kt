@@ -10,7 +10,8 @@ data class UserDto(
     val trangThai: String = "Ngoại tuyến",
     @field:JvmField // Đảm bảo Firestore đọc đúng thuộc tính Boolean kiểu online
     val online: Boolean = false,
-    val lastSeen: Long = 0L
+    val lastSeen: Long = 0L,
+    val friends: List<String> = emptyList()
 ) {
 
     fun toDomain(): User {
@@ -20,7 +21,8 @@ data class UserDto(
             displayName = hoTen.ifEmpty { "Thành viên ChatHub" },
             photoUrl = anhDaiDien,
             isOnline = online,
-            lastActiveTimestamp = lastSeen
+            lastActiveTimestamp = lastSeen,
+            friends = friends
         )
     }
 
@@ -36,7 +38,8 @@ data class UserDto(
                 anhDaiDien = user.photoUrl,
                 trangThai = if (user.isOnline) "Đang hoạt động" else "Ngoại tuyến",
                 online = user.isOnline,
-                lastSeen = user.lastActiveTimestamp
+                lastSeen = user.lastActiveTimestamp,
+                friends = user.friends
             )
         }
     }

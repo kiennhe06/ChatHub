@@ -9,6 +9,7 @@ package fpl.ph60001.chathub.domain.model
  * @property photoUrl Đường dẫn ảnh đại diện (avatar).
  * @property isOnline Trạng thái trực tuyến (True nếu đang online).
  * @property lastActiveTimestamp Thời gian hoạt động cuối cùng (dạng timestamp).
+ * @property friends Danh sách UID của bạn bè đã kết nối.
  */
 data class User(
     val uid: String = "",
@@ -16,5 +17,6 @@ data class User(
     val displayName: String = "Người dùng ChatHub",
     val photoUrl: String = "",
     val isOnline: Boolean = false,
-    val lastActiveTimestamp: Long = 0L
+    val lastActiveTimestamp: Long = 0L,
+    val friends: List<String> = emptyList()
 )
