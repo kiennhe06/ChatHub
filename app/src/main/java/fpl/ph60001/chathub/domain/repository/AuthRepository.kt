@@ -44,12 +44,32 @@ interface AuthRepository {
     fun observeCurrentUser(): Flow<User?>
 
     /**
-     * Cập nhật thông tin hồ sơ cá nhân (Tên hiển thị và đường dẫn ảnh đại diện).
+     * Cập nhật thông tin hồ sơ cá nhân (Tên hiển thị, đường dẫn ảnh đại diện và trạng thái).
      */
-    suspend fun updateProfile(displayName: String, photoUrl: String): Result<Unit>
+    suspend fun updateProfile(displayName: String, photoUrl: String, status: String): Result<Unit>
+
+    /**
+     * Đổi mật khẩu của người dùng hiện tại.
+     */
+    suspend fun updatePassword(newPassword: String): Result<Unit>
+
+    /**
+     * Xóa vĩnh viễn tài khoản người dùng hiện tại.
+     */
+    suspend fun deleteAccount(): Result<Unit>
+
+    /**
+     * Cập nhật FCM token lên Firestore để nhận thông báo đẩy.
+     */
+    suspend fun updateFcmToken(token: String): Result<Unit>
 
     /**
      * Lấy danh sách tất cả người dùng khác để hiển thị trong phòng chat.
      */
     fun getAllUsers(): Flow<List<User>>
+
+    /**
+     * Cập nhật trạng thái hoạt động trực tuyến/ngoại tuyến của người dùng.
+     */
+    suspend fun updateOnlineStatus(isOnline: Boolean): Result<Unit>
 }

@@ -82,6 +82,7 @@ fun ChatScreen(
 
     // Trạng thái hiển thị Dialog Menu tin nhắn được Long-press
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     // Tạo file tạm cho camera capture
     val cameraFile = remember {
@@ -284,6 +285,19 @@ fun ChatScreen(
                                     tint = NeonBlue
                                 )
                             }
+                        }
+                        
+                        IconButton(
+                            onClick = { showClearHistoryDialog = true },
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.08f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Xóa lịch sử cuộc trò chuyện",
+                                tint = Color(0xFFFF5252)
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -644,14 +658,52 @@ fun ChatScreen(
                                     viewModel.deleteMessage(msg.messageId)
                                     selectedMessageForMenu = null
                                 },
-                                    modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(text = "🗑️ Thu hồi tin nhắn", color = Color(0xFFFF5252), fontSize = 15.sp)
+                                Text(text = "🗑️ Thu hồi tin nhắn", color = Color(0xFFFF9F0A), fontSize = 15.sp)
                             }
+                        }
+
+                        // Luôn cho phép xóa vĩnh viễn tin nhắn khỏi cuộc trò chuyện (xóa document Firestore)
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteMessagePermanently(msg.messageId)
+                                selectedMessageForMenu = null
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = "❌ Xóa tin nhắn vĩnh viễn", color = Color(0xFFFF453A), fontSize = 15.sp)
                         }
                     }
                 }
             }
+        }
+
+        // Dialog xác nhận xóa lịch sử trò chuyện
+        if (showClearHistoryDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearHistoryDialog = false },
+                title = { Text("Xóa lịch sử trò chuyện", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = { Text("Bạn có chắc chắn muốn xóa toàn bộ lịch sử tin nhắn của cuộc trò chuyện này? Hành động này sẽ xóa sạch tin nhắn ở cả hai phía và không thể khôi phục lại.", color = Color.White.copy(alpha = 0.8f)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.clearChatHistory()
+                            showClearHistoryDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A))
+                    ) {
+                        Text("XÓA SẠCH", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearHistoryDialog = false }) {
+                        Text("HỦY BỎ", color = Color.White.copy(alpha = 0.6f))
+                    }
+                },
+                containerColor = Color(0xFF1E293B),
+                shape = RoundedCornerShape(24.dp)
+            )
         }
     }
 }

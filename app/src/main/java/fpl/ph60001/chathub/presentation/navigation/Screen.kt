@@ -20,6 +20,7 @@ sealed class Screen(val route: String) {
     object ForgotPassword : Screen("forgot_password")
     object Search : Screen("search")
     object CreateGroup : Screen("create_group")
+    object Settings : Screen("settings")
     object GroupInfo : Screen("group_info/{groupId}") {
         fun createRoute(groupId: String): String {
             return "group_info/$groupId"

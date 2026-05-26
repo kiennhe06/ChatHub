@@ -424,4 +424,24 @@ class MessageRepositoryImpl @Inject constructor(
             }
         }, 1000)
     }
+
+    override suspend fun deleteMessagePermanently(conversationId: String, messageId: String): Result<Unit> = Result.runCatching {
+        val cleanRoomKey = getCleanKey(conversationId)
+        try {
+            firestore.collection("conversations")
+                .document(cleanRoomKey)
+                .collection("messages")
+                .document(messageId)
+                .delete()
+                .await()
+        } catch (e: Exception) {
+            val localList = mockMessagesMap[cleanRoomKey]
+            localList?.removeAll { it.messageId == messageId }
+        }
+    }
+
+    override fun clearMockMessages(conversationId: String) {
+        val cleanRoomKey = getCleanKey(conversationId)
+        mockMessagesMap[cleanRoomKey] = mutableListOf()
+    }
 }

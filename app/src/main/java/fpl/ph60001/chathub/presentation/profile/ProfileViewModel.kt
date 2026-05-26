@@ -74,7 +74,7 @@ class ProfileViewModel @Inject constructor(
                 // Cập nhật trường photoUrl của user nội bộ trước
                 _user.value = _user.value?.copy(photoUrl = downloadUrl)
                 // Lưu luôn lên máy chủ Auth/Firestore để đồng bộ mượt mà!
-                updateProfile(_user.value?.displayName ?: "", downloadUrl)
+                updateProfile(_user.value?.displayName ?: "", downloadUrl, _user.value?.status ?: "Đang hoạt động")
             }
             result.onFailure { error ->
                 _errorMessage.value = error.localizedMessage ?: "Lỗi khi tải ảnh đại diện lên Storage"
@@ -85,7 +85,7 @@ class ProfileViewModel @Inject constructor(
     /**
      * Cập nhật thông tin hồ sơ của người dùng.
      */
-    fun updateProfile(newDisplayName: String, newPhotoUrl: String) {
+    fun updateProfile(newDisplayName: String, newPhotoUrl: String, newStatus: String) {
         val name = newDisplayName.trim()
         if (name.isEmpty()) {
             _errorMessage.value = "Họ và tên không được để trống!"
@@ -97,7 +97,7 @@ class ProfileViewModel @Inject constructor(
             _errorMessage.value = null
             _successMessage.value = null
 
-            val result = authRepository.updateProfile(name, newPhotoUrl)
+            val result = authRepository.updateProfile(name, newPhotoUrl, newStatus)
             
             _isLoading.value = false
             result.onSuccess {
@@ -105,6 +105,33 @@ class ProfileViewModel @Inject constructor(
             }
             result.onFailure { error ->
                 _errorMessage.value = error.localizedMessage ?: "Lỗi khi cập nhật thông tin!"
+            }
+        }
+    }
+
+    /**
+     * Đổi mật khẩu tài khoản người dùng.
+     */
+    fun updatePassword(newPass: String) {
+        val pass = newPass.trim()
+        if (pass.length < 6) {
+            _errorMessage.value = "Mật khẩu mới phải dài ít nhất 6 ký tự!"
+            return
+        }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            _successMessage.value = null
+
+            val result = authRepository.updatePassword(pass)
+            
+            _isLoading.value = false
+            result.onSuccess {
+                _successMessage.value = "Đổi mật khẩu thành công!"
+            }
+            result.onFailure { error ->
+                _errorMessage.value = error.localizedMessage ?: "Đổi mật khẩu thất bại. Bạn có thể cần đăng nhập lại trước khi thực hiện đổi mật khẩu."
             }
         }
     }

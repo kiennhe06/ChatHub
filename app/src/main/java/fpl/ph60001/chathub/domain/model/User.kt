@@ -18,5 +18,6 @@ data class User(
     val photoUrl: String = "",
     val isOnline: Boolean = false,
     val lastActiveTimestamp: Long = 0L,
-    val friends: List<String> = emptyList()
+    val friends: List<String> = emptyList(),
+    val status: String = "Đang hoạt động"
 )

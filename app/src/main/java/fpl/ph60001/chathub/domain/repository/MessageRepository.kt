@@ -63,4 +63,14 @@ interface MessageRepository {
         bytes: ByteArray,
         fileName: String
     ): Flow<UploadState>
+
+    /**
+     * Xóa vĩnh viễn tin nhắn khỏi Firestore (xóa hẳn document).
+     */
+    suspend fun deleteMessagePermanently(conversationId: String, messageId: String): Result<Unit>
+
+    /**
+     * Xóa danh sách tin nhắn giả lập cục bộ của phòng chat để không tự động tải lại dữ liệu demo.
+     */
+    fun clearMockMessages(conversationId: String)
 }

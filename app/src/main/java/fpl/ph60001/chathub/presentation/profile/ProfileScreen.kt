@@ -28,14 +28,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import fpl.ph60001.chathub.ui.theme.GradientEnd
 import fpl.ph60001.chathub.ui.theme.GradientStart
 import kotlinx.coroutines.delay
 
-/**
- * Giao diện quản lý thông tin tài khoản người dùng (ProfileScreen).
- * Cho phép người dùng chỉnh sửa tên hiển thị và nhấn vào Avatar để chọn ảnh từ máy/thư viện và tải lên cực chuyên nghiệp.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -49,18 +51,21 @@ fun ProfileScreen(
 
     val context = LocalContext.current
     var nameInput by remember { mutableStateOf("") }
+    var statusInput by remember { mutableStateOf("") }
+    var newPasswordInput by remember { mutableStateOf("") }
 
-    // Đồng bộ hóa trạng thái Họ và Tên khi thông tin người dùng được tải về
+    // Đồng bộ hóa trạng thái khi thông tin người dùng được tải về
     LaunchedEffect(user) {
         user?.let {
             nameInput = it.displayName
+            statusInput = it.status
         }
     }
 
-    // Tự động xóa thông báo thành công/lỗi sau 3 giây
+    // Tự động xóa thông báo sau 4 giây
     LaunchedEffect(successMessage, errorMessage) {
         if (successMessage != null || errorMessage != null) {
-            delay(3000)
+            delay(4000)
             viewModel.clearMessages()
         }
     }
@@ -78,7 +83,7 @@ fun ProfileScreen(
                     viewModel.uploadAvatar(bytes)
                 }
             } catch (e: Exception) {
-                // Xử lý lỗi nếu có khi đọc tệp tin
+                // Xử lý lỗi đọc ảnh
             }
         }
     }
@@ -86,121 +91,138 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Hồ sơ cá nhân", fontWeight = FontWeight.Bold) },
+                title = { Text("Hồ sơ cá nhân", fontWeight = FontWeight.Bold, color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Quay lại")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Quay lại",
+                            tint = Color.White
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F172A))
             )
-        }
+        },
+        containerColor = Color(0xFF0F172A)
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(MaterialTheme.colorScheme.background)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color(0xFF0F172A), Color(0xFF1E293B))
+                    )
+                )
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Khung Avatar lớn, có thể nhấn để chọn ảnh + Biểu tượng camera đè lên mờ ảo
+            // Khung Avatar lớn
             Box(
                 modifier = Modifier
-                    .size(130.dp)
+                    .size(120.dp)
                     .clip(CircleShape)
-                    .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
+                    .border(2.dp, Color(0xFF64D2FF), CircleShape)
                     .clickable(enabled = !isLoading) {
                         imagePickerLauncher.launch("image/*")
                     },
                 contentAlignment = Alignment.BottomCenter
             ) {
-                // Ảnh Avatar chính
                 AsyncImage(
                     model = user?.photoUrl?.ifEmpty { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80" }
                         ?: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80",
-                    contentDescription = "Avatar của tôi",
+                    contentDescription = "Avatar",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
 
-                // Lớp mờ hình camera báo hiệu có thể thay đổi
+                // Lớp mờ hình camera
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(36.dp)
-                        .background(Color.Black.copy(alpha = 0.5f)),
+                        .height(32.dp)
+                        .background(Color.Black.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.CameraAlt,
-                        contentDescription = "Chọn ảnh",
+                        contentDescription = "Đổi ảnh đại diện",
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Email tĩnh của tài khoản
+            // Email (Chỉ xem - Read only)
             Text(
                 text = user?.email ?: "",
                 fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                color = Color.White.copy(alpha = 0.6f),
                 fontWeight = FontWeight.Medium
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Ô nhập Họ và Tên mới
+            // Form thay đổi thông tin cá nhân
+            Text(
+                text = "THÔNG TIN CÁ NHÂN",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF64D2FF),
+                modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)
+            )
+
             OutlinedTextField(
                 value = nameInput,
                 onValueChange = { nameInput = it },
-                label = { Text("Họ và Tên") },
+                label = { Text("Họ và Tên", color = Color.White.copy(alpha = 0.6f)) },
                 leadingIcon = {
-                    Icon(imageVector = Icons.Default.Person, contentDescription = "Name Icon")
+                    Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = Color(0xFF64D2FF))
                 },
                 singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF00F2FE),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedLabelColor = Color(0xFF00F2FE),
+                    unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Hiển thị thông báo lỗi tiếng Việt
-            AnimatedVisibility(visible = errorMessage != null) {
-                errorMessage?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 12.dp)
-                    )
-                }
-            }
+            OutlinedTextField(
+                value = statusInput,
+                onValueChange = { statusInput = it },
+                label = { Text("Trạng thái", color = Color.White.copy(alpha = 0.6f)) },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = Color(0xFF64D2FF))
+                },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF00F2FE),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedLabelColor = Color(0xFF00F2FE),
+                    unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
 
-            // Hiển thị thông báo thành công tiếng Việt (màu xanh lá)
-            AnimatedVisibility(visible = successMessage != null) {
-                successMessage?.let {
-                    Text(
-                        text = it,
-                        color = Color(0xFF34C759),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 12.dp)
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.height(20.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Nút Lưu thay đổi Gradient bo góc cực sang trọng
+            // Nút Lưu thông tin cá nhân
             Button(
-                onClick = { viewModel.updateProfile(nameInput, user?.photoUrl ?: "") },
+                onClick = { viewModel.updateProfile(nameInput, user?.photoUrl ?: "", statusInput) },
                 enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -230,9 +252,106 @@ fun ProfileScreen(
                             text = "LƯU THAY ĐỔI",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            fontSize = 15.sp
                         )
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Form thay đổi mật khẩu
+            Text(
+                text = "ĐỔI MẬT KHẨU TÀI KHOẢN",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFF5252),
+                modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)
+            )
+
+            OutlinedTextField(
+                value = newPasswordInput,
+                onValueChange = { newPasswordInput = it },
+                label = { Text("Mật khẩu mới", color = Color.White.copy(alpha = 0.6f)) },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color(0xFFFF5252))
+                },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFFFF5252),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedLabelColor = Color(0xFFFF5252),
+                    unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Nút Lưu mật khẩu
+            Button(
+                onClick = {
+                    viewModel.updatePassword(newPasswordInput)
+                    newPasswordInput = ""
+                },
+                enabled = !isLoading && newPasswordInput.isNotEmpty(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent,
+                    disabledContainerColor = Color.Gray.copy(alpha = 0.2f)
+                ),
+                contentPadding = PaddingValues()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = if (isLoading || newPasswordInput.isEmpty()) {
+                                    listOf(Color.Gray.copy(alpha = 0.4f), Color.Gray.copy(alpha = 0.4f))
+                                } else {
+                                    listOf(Color(0xFFE53935), Color(0xFFD32F2F))
+                                }
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "ĐỔI MẬT KHẨU",
+                        color = if (newPasswordInput.isEmpty()) Color.White.copy(alpha = 0.4f) else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+            }
+
+            // Hiển thị thông báo kết quả
+            Spacer(modifier = Modifier.height(16.dp))
+            AnimatedVisibility(visible = errorMessage != null) {
+                errorMessage?.let {
+                    Text(
+                        text = it,
+                        color = Color(0xFFFF5252),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            AnimatedVisibility(visible = successMessage != null) {
+                successMessage?.let {
+                    Text(
+                        text = it,
+                        color = Color(0xFF00E676),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }

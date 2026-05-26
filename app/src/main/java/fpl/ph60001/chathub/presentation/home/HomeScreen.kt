@@ -11,11 +11,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,7 +56,8 @@ fun HomeScreen(
     onNavigateToProfile: () -> Unit,
     onNavigateToSearch: () -> Unit,
     onNavigateToLogin: () -> Unit,
-    onNavigateToCreateGroup: () -> Unit
+    onNavigateToCreateGroup: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
     val conversations by viewModel.conversations.collectAsState()
@@ -155,19 +157,21 @@ fun HomeScreen(
                         
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        // Nút Đăng xuất
+                        // Nút Cài đặt hệ thống
                         IconButton(
-                            onClick = { viewModel.logout() },
+                            onClick = onNavigateToSettings,
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.08f))
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ExitToApp,
-                                contentDescription = "Đăng xuất",
-                                tint = Color(0xFFFF5252)
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Cài đặt",
+                                tint = NeonBlue
                             )
                         }
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
                     },
                     colors = TopAppBarDefaults.largeTopAppBarColors(
                         containerColor = Color.Transparent,

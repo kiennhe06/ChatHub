@@ -69,7 +69,7 @@ class RegisterViewModel @Inject constructor(
     }
 
     /**
-     * Thực hiện đăng ký tài khoản mới và đăng xuất ngay để bắt đăng nhập lại.
+     * Thực hiện đăng ký tài khoản mới 
      */
     fun register() {
         val currentName = _displayName.value.trim()

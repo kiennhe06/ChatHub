@@ -22,7 +22,8 @@ data class UserDto(
             photoUrl = anhDaiDien,
             isOnline = online,
             lastActiveTimestamp = lastSeen,
-            friends = friends
+            friends = friends,
+            status = trangThai.ifEmpty { "Đang hoạt động" }
         )
     }
 
@@ -36,7 +37,7 @@ data class UserDto(
                 hoTen = user.displayName,
                 email = user.email,
                 anhDaiDien = user.photoUrl,
-                trangThai = if (user.isOnline) "Đang hoạt động" else "Ngoại tuyến",
+                trangThai = user.status,
                 online = user.isOnline,
                 lastSeen = user.lastActiveTimestamp,
                 friends = user.friends

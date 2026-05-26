@@ -28,6 +28,8 @@ import fpl.ph60001.chathub.presentation.group.CreateGroupScreen
 import fpl.ph60001.chathub.presentation.group.CreateGroupViewModel
 import fpl.ph60001.chathub.presentation.group.GroupInfoScreen
 import fpl.ph60001.chathub.presentation.group.GroupInfoViewModel
+import fpl.ph60001.chathub.presentation.settings.SettingsScreen
+import fpl.ph60001.chathub.presentation.settings.SettingsViewModel
 
 /**
  * Định nghĩa Đồ thị Điều hướng (NavGraph) chính quản lý tất cả các trang màn hình trong ChatHub.
@@ -129,6 +131,9 @@ fun NavGraph(
                 },
                 onNavigateToCreateGroup = {
                     navController.navigate(Screen.CreateGroup.route)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings.route)
                 }
             )
         }
@@ -180,6 +185,22 @@ fun NavGraph(
                 viewModel = profileViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        // Màn hình Cài đặt (Settings Screen)
+        composable(route = Screen.Settings.route) {
+            val settingsViewModel: SettingsViewModel = hiltViewModel()
+            SettingsScreen(
+                viewModel = settingsViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
             )
         }

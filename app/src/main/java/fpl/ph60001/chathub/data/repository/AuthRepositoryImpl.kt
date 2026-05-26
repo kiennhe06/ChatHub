@@ -222,14 +222,64 @@ class AuthRepositoryImpl @Inject constructor(
         awaitClose { listener.remove() }
     }
 
-    override suspend fun updateProfile(displayName: String, photoUrl: String): Result<Unit> {
+    override suspend fun updateProfile(displayName: String, photoUrl: String, status: String): Result<Unit> {
         return try {
             val currentUid = auth.currentUser?.uid ?: return Result.failure(Exception("Chưa đăng nhập"))
             firestore.collection("users").document(currentUid)
-                .update(mapOf("hoTen" to displayName, "anhDaiDien" to photoUrl))
+                .update(mapOf("hoTen" to displayName, "anhDaiDien" to photoUrl, "trangThai" to status))
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
+            if (isFirebaseUninitialized(e)) {
+                return Result.success(Unit)
+            }
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun updatePassword(newPassword: String): Result<Unit> {
+        return try {
+            val user = auth.currentUser ?: return Result.failure(Exception("Chưa đăng nhập"))
+            user.updatePassword(newPassword).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (isFirebaseUninitialized(e)) {
+                return Result.success(Unit)
+            }
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun deleteAccount(): Result<Unit> {
+        return try {
+            val user = auth.currentUser ?: return Result.failure(Exception("Chưa đăng nhập"))
+            val uid = user.uid
+            
+            // Xóa tài liệu Firestore trước
+            firestore.collection("users").document(uid).delete().await()
+            
+            // Xóa tài khoản Auth
+            user.delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (isFirebaseUninitialized(e)) {
+                return Result.success(Unit)
+            }
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun updateFcmToken(token: String): Result<Unit> {
+        return try {
+            val currentUid = auth.currentUser?.uid ?: return Result.failure(Exception("Chưa đăng nhập"))
+            firestore.collection("users").document(currentUid)
+                .update("fcmToken", token)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (isFirebaseUninitialized(e)) {
+                return Result.success(Unit)
+            }
             Result.failure(e)
         }
     }
@@ -298,5 +348,23 @@ class AuthRepositoryImpl @Inject constructor(
                 lastActiveTimestamp = System.currentTimeMillis() - 3600000 // 1 giờ trước
             )
         ).filter { it.uid != currentUid }
+    }
+
+    override suspend fun updateOnlineStatus(isOnline: Boolean): Result<Unit> {
+        return try {
+            val currentUid = auth.currentUser?.uid ?: return Result.failure(Exception("Chưa đăng nhập"))
+            firestore.collection("users").document(currentUid)
+                .update(mapOf(
+                    "online" to isOnline,
+                    "lastSeen" to System.currentTimeMillis()
+                ))
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (isFirebaseUninitialized(e)) {
+                return Result.success(Unit)
+            }
+            Result.failure(e)
+        }
     }
 }

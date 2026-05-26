@@ -341,6 +341,55 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Xóa vĩnh viễn tin nhắn (cho tất cả mọi người, biến mất khỏi UI).
+     */
+    fun deleteMessagePermanently(messageId: String) {
+        viewModelScope.launch {
+            messageRepository.deleteMessagePermanently(conversationId, messageId)
+        }
+    }
+
+    /**
+     * Xóa toàn bộ lịch sử cuộc trò chuyện này.
+     */
+    fun clearChatHistory() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // Lấy tất cả tin nhắn trên Firestore của cuộc trò chuyện này
+                val snapshot = firestore.collection("conversations")
+                    .document(conversationId)
+                    .collection("messages")
+                    .get()
+                    .await()
+                
+                // Xóa từng tài liệu bằng batch
+                firestore.runBatch { batch ->
+                    snapshot.documents.forEach { doc ->
+                        batch.delete(doc.reference)
+                    }
+                }.await()
+
+                // Cập nhật tin nhắn cuối cùng trong cuộc trò chuyện thành rỗng
+                firestore.collection("conversations")
+                    .document(conversationId)
+                    .update(mapOf(
+                        "lastMessage" to "",
+                        "lastMessageTime" to 0L
+                    ))
+                    .await()
+
+                // Xóa cả mock messages cục bộ để không tự sinh lại tin nhắn mẫu
+                messageRepository.clearMockMessages(conversationId)
+            } catch (e: Exception) {
+                // Bỏ qua lỗi
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /**
      * Bày tỏ cảm xúc Emoji lên tin nhắn.
      */
     fun reactToMessage(messageId: String, emoji: String) {
