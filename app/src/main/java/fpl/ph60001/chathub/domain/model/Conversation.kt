@@ -22,5 +22,9 @@ data class Conversation(
     val partnerId: String = "",
     val partnerName: String = "Người dùng ChatHub",
     val partnerAvatar: String = "",
-    val partnerOnline: Boolean = false
+    val partnerOnline: Boolean = false,
+    val isGroup: Boolean = false,
+    val groupName: String = "",
+    val groupAvatar: String = "",
+    val adminIds: List<String> = emptyList()
 )

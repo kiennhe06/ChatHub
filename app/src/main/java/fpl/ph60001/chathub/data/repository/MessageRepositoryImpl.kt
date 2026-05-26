@@ -6,6 +6,7 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import fpl.ph60001.chathub.data.model.MessageDto
 import fpl.ph60001.chathub.domain.model.Message
+import fpl.ph60001.chathub.domain.model.UploadState
 import fpl.ph60001.chathub.domain.repository.MessageRepository
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -288,6 +289,40 @@ class MessageRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             // Không làm gì, trạng thái typing tự động tắt
         }
+    }
+
+    override fun uploadMedia(
+        conversationId: String,
+        storagePath: String,
+        bytes: ByteArray,
+        fileName: String
+    ): Flow<UploadState> = callbackFlow {
+        val cleanRoomKey = getCleanKey(conversationId)
+        val storageRef = storage.reference
+            .child("chats/$cleanRoomKey/$storagePath/$fileName")
+
+        val uploadTask = storageRef.putBytes(bytes)
+
+        // Lắng nghe tiến trình tải lên realtime
+        uploadTask.addOnProgressListener { taskSnapshot ->
+            val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toInt()
+            trySend(UploadState.Progress(progress))
+        }
+
+        uploadTask.addOnSuccessListener {
+            storageRef.downloadUrl.addOnSuccessListener { uri ->
+                trySend(UploadState.Success(uri.toString()))
+                close()
+            }.addOnFailureListener { e ->
+                trySend(UploadState.Error(e.localizedMessage ?: "Lỗi lấy đường dẫn tải xuống"))
+                close()
+            }
+        }.addOnFailureListener { e ->
+            trySend(UploadState.Error(e.localizedMessage ?: "Tải tệp lên thất bại"))
+            close()
+        }
+
+        awaitClose { uploadTask.cancel() }
     }
 
     /**

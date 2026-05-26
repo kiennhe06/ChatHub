@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -50,10 +51,11 @@ private val GreenOnline = Color(0xFF4ADE80)     // Chấm xanh online tươi m�
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onNavigateToChat: (String, String) -> Unit,
+    onNavigateToChat: (String, String, Boolean) -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToSearch: () -> Unit,
-    onNavigateToLogin: () -> Unit
+    onNavigateToLogin: () -> Unit,
+    onNavigateToCreateGroup: () -> Unit
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
     val conversations by viewModel.conversations.collectAsState()
@@ -121,6 +123,22 @@ fun HomeScreen(
                         }
                     },
                     actions = {
+                        // Nút tạo nhóm chat
+                        IconButton(
+                            onClick = onNavigateToCreateGroup,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.08f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GroupAdd,
+                                contentDescription = "Tạo nhóm",
+                                tint = NeonBlue
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         // Nút xem hồ sơ cá nhân
                         IconButton(
                             onClick = onNavigateToProfile,
@@ -291,7 +309,7 @@ fun HomeScreen(
                                         items(onlineConversations) { conv ->
                                             OnlineBuddyItem(
                                                 conversation = conv,
-                                                onClick = { onNavigateToChat(conv.partnerId, conv.partnerName) }
+                                                onClick = { onNavigateToChat(conv.partnerId, conv.partnerName, conv.isGroup) }
                                             )
                                         }
                                     }
@@ -347,7 +365,7 @@ fun HomeScreen(
                                 items(conversations) { conversation ->
                                     GlassConversationItem(
                                         conversation = conversation,
-                                        onClick = { onNavigateToChat(conversation.partnerId, conversation.partnerName) }
+                                        onClick = { onNavigateToChat(conversation.partnerId, conversation.partnerName, conversation.isGroup) }
                                     )
                                 }
                             }
@@ -435,7 +453,7 @@ fun HomeScreen(
                                 items(friendsList) { friend ->
                                     GlassFriendListItem(
                                         friend = friend,
-                                        onChatClick = { onNavigateToChat(friend.uid, friend.displayName) },
+                                        onChatClick = { onNavigateToChat(friend.uid, friend.displayName, false) },
                                         onUnfriendClick = { viewModel.removeFriend(friend.uid) }
                                     )
                                 }

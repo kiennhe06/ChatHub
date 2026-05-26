@@ -24,6 +24,10 @@ import fpl.ph60001.chathub.presentation.search.SearchScreen
 import fpl.ph60001.chathub.presentation.search.SearchViewModel
 import fpl.ph60001.chathub.presentation.splash.SplashScreen
 import fpl.ph60001.chathub.presentation.splash.SplashViewModel
+import fpl.ph60001.chathub.presentation.group.CreateGroupScreen
+import fpl.ph60001.chathub.presentation.group.CreateGroupViewModel
+import fpl.ph60001.chathub.presentation.group.GroupInfoScreen
+import fpl.ph60001.chathub.presentation.group.GroupInfoViewModel
 
 /**
  * Định nghĩa Đồ thị Điều hướng (NavGraph) chính quản lý tất cả các trang màn hình trong ChatHub.
@@ -109,8 +113,8 @@ fun NavGraph(
             val homeViewModel: HomeViewModel = hiltViewModel()
             HomeScreen(
                 viewModel = homeViewModel,
-                onNavigateToChat = { partnerId, partnerName ->
-                    navController.navigate(Screen.Chat.createRoute(partnerId, partnerName))
+                onNavigateToChat = { partnerId, partnerName, isGroup ->
+                    navController.navigate(Screen.Chat.createRoute(partnerId, partnerName, isGroup))
                 },
                 onNavigateToProfile = {
                     navController.navigate(Screen.Profile.route)
@@ -122,6 +126,9 @@ fun NavGraph(
                     navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.Home.route) { inclusive = true }
                     }
+                },
+                onNavigateToCreateGroup = {
+                    navController.navigate(Screen.CreateGroup.route)
                 }
             )
         }
@@ -131,7 +138,11 @@ fun NavGraph(
             route = Screen.Chat.route,
             arguments = listOf(
                 navArgument("partnerId") { type = NavType.StringType },
-                navArgument("partnerName") { type = NavType.StringType }
+                navArgument("partnerName") { type = NavType.StringType },
+                navArgument("isGroup") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
             )
         ) {
             val chatViewModel: ChatViewModel = hiltViewModel()
@@ -139,6 +150,9 @@ fun NavGraph(
                 viewModel = chatViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToGroupInfo = { groupId ->
+                    navController.navigate(Screen.GroupInfo.createRoute(groupId))
                 }
             )
         }
@@ -152,7 +166,7 @@ fun NavGraph(
                     navController.popBackStack()
                 },
                 onNavigateToChat = { partnerId, partnerName ->
-                    navController.navigate(Screen.Chat.createRoute(partnerId, partnerName)) {
+                    navController.navigate(Screen.Chat.createRoute(partnerId, partnerName, false)) {
                         popUpTo(Screen.Search.route) { inclusive = true }
                     }
                 }
@@ -166,6 +180,43 @@ fun NavGraph(
                 viewModel = profileViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        // Màn hình Tạo nhóm chat (CreateGroup Screen)
+        composable(route = Screen.CreateGroup.route) {
+            val createGroupViewModel: CreateGroupViewModel = hiltViewModel()
+            CreateGroupScreen(
+                viewModel = createGroupViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToChat = { groupId, groupName ->
+                    navController.navigate(Screen.Chat.createRoute(groupId, groupName, isGroup = true)) {
+                        popUpTo(Screen.CreateGroup.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // Màn hình Thông tin nhóm chat (GroupInfo Screen)
+        composable(
+            route = Screen.GroupInfo.route,
+            arguments = listOf(
+                navArgument("groupId") { type = NavType.StringType }
+            )
+        ) {
+            val groupInfoViewModel: GroupInfoViewModel = hiltViewModel()
+            GroupInfoScreen(
+                viewModel = groupInfoViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
                 }
             )
         }

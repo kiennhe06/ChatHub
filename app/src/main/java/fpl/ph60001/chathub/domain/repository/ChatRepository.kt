@@ -97,4 +97,39 @@ interface ChatRepository {
      * Lắng nghe các lời mời kết bạn ĐI từ người dùng hiện tại (outgoing).
      */
     fun getOutgoingFriendRequests(currentUserId: String): Flow<List<FriendRequest>>
+
+    /**
+     * Tạo nhóm chat mới.
+     */
+    suspend fun createGroup(groupName: String, groupAvatar: String, memberIds: List<String>): Result<String>
+
+    /**
+     * Lấy thông tin nhóm chat thời gian thực.
+     */
+    fun getGroupInfo(groupId: String): Flow<Conversation?>
+
+    /**
+     * Cập nhật thông tin nhóm chat (tên nhóm và ảnh đại diện).
+     */
+    suspend fun updateGroupInfo(groupId: String, newName: String, newAvatar: String): Result<Unit>
+
+    /**
+     * Thêm các thành viên mới vào nhóm chat.
+     */
+    suspend fun addGroupMembers(groupId: String, newMemberIds: List<String>): Result<Unit>
+
+    /**
+     * Xóa một thành viên ra khỏi nhóm chat.
+     */
+    suspend fun removeGroupMember(groupId: String, memberId: String): Result<Unit>
+
+    /**
+     * Rời khỏi nhóm chat.
+     */
+    suspend fun leaveGroup(groupId: String, userId: String): Result<Unit>
+
+    /**
+     * Giải tán nhóm chat.
+     */
+    suspend fun disbandGroup(groupId: String): Result<Unit>
 }

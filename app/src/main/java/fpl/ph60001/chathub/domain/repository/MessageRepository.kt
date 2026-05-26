@@ -1,6 +1,7 @@
 package fpl.ph60001.chathub.domain.repository
 
 import fpl.ph60001.chathub.domain.model.Message
+import fpl.ph60001.chathub.domain.model.UploadState
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -47,4 +48,19 @@ interface MessageRepository {
      * Cập nhật trạng thái đang gõ phím của bản thân lên hệ thống.
      */
     suspend fun updateTypingStatus(conversationId: String, userId: String, isTyping: Boolean): Result<Unit>
+
+    /**
+     * Tải tệp media (ảnh/file/voice) lên Firebase Storage và phát tiến trình upload realtime.
+     * @param conversationId Mã phòng chat.
+     * @param storagePath Đường dẫn con trên Storage (ví dụ: "images", "files", "voice").
+     * @param bytes Mảng bytes dữ liệu tệp tin.
+     * @param fileName Tên tệp gốc (ví dụ: "photo_123.jpg").
+     * @return Luồng phát ra trạng thái upload: Progress(%) -> Success(url) hoặc Error(msg).
+     */
+    fun uploadMedia(
+        conversationId: String,
+        storagePath: String,
+        bytes: ByteArray,
+        fileName: String
+    ): Flow<UploadState>
 }

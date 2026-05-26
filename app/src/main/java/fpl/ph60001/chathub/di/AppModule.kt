@@ -69,9 +69,10 @@ object AppModule {
     @Singleton
     fun provideChatRepository(
         firestore: FirebaseFirestore,
-        storage: FirebaseStorage
+        storage: FirebaseStorage,
+        auth: FirebaseAuth
     ): ChatRepository {
-        return ChatRepositoryImpl(firestore, storage)
+        return ChatRepositoryImpl(firestore, storage, auth)
     }
 
     @Provides

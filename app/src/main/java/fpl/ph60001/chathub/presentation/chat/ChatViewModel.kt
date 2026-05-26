@@ -3,9 +3,13 @@ package fpl.ph60001.chathub.presentation.chat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fpl.ph60001.chathub.data.model.UserDto
 import fpl.ph60001.chathub.domain.model.Message
 import fpl.ph60001.chathub.domain.model.ReplyTo
+import fpl.ph60001.chathub.domain.model.UploadState
+import fpl.ph60001.chathub.domain.model.User
 import fpl.ph60001.chathub.domain.repository.AuthRepository
 import fpl.ph60001.chathub.domain.repository.MessageRepository
 import fpl.ph60001.chathub.domain.usecase.GetMessagesUseCase
@@ -15,12 +19,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 /**
  * Lớp ViewModel quản lý toàn bộ luồng nghiệp vụ của ChatScreen chi tiết,
- * bao gồm gửi/nhận tin nhắn realtime, biểu cảm emoji, chỉnh sửa, xóa, phản hồi (reply)
- * và chỉ báo đang gõ (typing indicator).
+ * bao gồm gửi/nhận tin nhắn realtime, gửi ảnh/file media, biểu cảm emoji,
+ * chỉnh sửa, xóa, phản hồi (reply) và chỉ báo đang gõ (typing indicator).
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -29,19 +34,31 @@ class ChatViewModel @Inject constructor(
     private val getMessagesUseCase: GetMessagesUseCase,
     private val sendMessageUseCase: SendMessageUseCase,
     private val updateTypingUseCase: UpdateTypingUseCase,
+    private val firestore: FirebaseFirestore,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     // Lấy ID và Tên đối phương từ tham số điều hướng
     val partnerId: String = checkNotNull(savedStateHandle["partnerId"])
     val partnerName: String = checkNotNull(savedStateHandle["partnerName"])
+    val isGroup: Boolean = savedStateHandle["isGroup"] ?: false
 
     // Lấy UID người dùng hiện tại để phân biệt tin nhắn bên Trái/Phải
     val currentUserUid: String = authRepository.getCurrentUser()?.uid ?: "demo_user_uid"
     private val currentUserName: String = authRepository.getCurrentUser()?.displayName ?: "Tôi"
 
-    // Key phòng chat chuẩn hóa
-    private val conversationId: String = getRoomKey(currentUserUid, partnerId)
+    // Key phòng chat chuẩn hóa: Nếu là nhóm, conversationId chính là partnerId (groupId)
+    val conversationId: String = if (isGroup) partnerId else getRoomKey(currentUserUid, partnerId)
+
+    // Map lưu thông tin các thành viên trong nhóm để hiển thị tên và avatar
+    private val _groupMembers = MutableStateFlow<Map<String, User>>(emptyMap())
+    val groupMembers: StateFlow<Map<String, User>> = _groupMembers.asStateFlow()
+
+    private val _groupAvatar = MutableStateFlow("")
+    val groupAvatar: StateFlow<String> = _groupAvatar.asStateFlow()
+
+    private val _groupNameFlow = MutableStateFlow("")
+    val groupNameFlow: StateFlow<String> = _groupNameFlow.asStateFlow()
 
     // Nội dung ô nhập văn bản
     private val _messageText = MutableStateFlow("")
@@ -59,16 +76,80 @@ class ChatViewModel @Inject constructor(
     private val _editingMessage = MutableStateFlow<Message?>(null)
     val editingMessage: StateFlow<Message?> = _editingMessage.asStateFlow()
 
+    // Danh sách lưu trạng thái tải lên tệp tin
+    private val _isUploading = MutableStateFlow(false)
+    val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
+
+    private val _uploadProgress = MutableStateFlow(-1)
+    val uploadProgress: StateFlow<Int> = _uploadProgress.asStateFlow()
+
+    private val _uploadError = MutableStateFlow<String?>(null)
+    val uploadError: StateFlow<String?> = _uploadError.asStateFlow()
+
     // Luồng tin nhắn realtime kết nối với UseCase
     val messagesList: StateFlow<List<Message>> = getMessagesUseCase(conversationId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Chỉ báo đối phương đang gõ tin nhắn
-    val isPartnerTyping: StateFlow<Boolean> = messageRepository.getTypingStatus(conversationId, partnerId)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isPartnerTyping: StateFlow<Boolean> = if (isGroup) {
+        flowOf(false).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    } else {
+        messageRepository.getTypingStatus(conversationId, partnerId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    }
 
     // Công việc định thời gian tự động xóa trạng thái đang gõ phím
     private var typingJob: Job? = null
+
+    init {
+        if (isGroup) {
+            loadGroupMembers()
+        }
+    }
+
+    private fun loadGroupMembers() {
+        viewModelScope.launch {
+            try {
+                // Tải danh sách thành viên của cuộc hội thoại
+                firestore.collection("conversations")
+                    .document(conversationId)
+                    .addSnapshotListener { snapshot, error ->
+                        if (snapshot != null && snapshot.exists()) {
+                            val avatar = snapshot.getString("groupAvatar") ?: ""
+                            val name = snapshot.getString("groupName") ?: ""
+                            _groupAvatar.value = avatar
+                            _groupNameFlow.value = name
+
+                            val members = snapshot.get("members") as? List<String>
+                            if (members != null) {
+                                viewModelScope.launch {
+                                    val list = mutableMapOf<String, User>()
+                                    members.chunked(10).forEach { chunk ->
+                                        try {
+                                            val usersSnapshot = firestore.collection("users")
+                                                .whereIn("uid", chunk)
+                                                .get()
+                                                .await()
+                                            usersSnapshot.documents.forEach { doc ->
+                                                val user = doc.toObject(UserDto::class.java)?.toDomain()
+                                                if (user != null) {
+                                                    list[user.uid] = user
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            // Lỗi
+                                        }
+                                    }
+                                    _groupMembers.value = list
+                                }
+                            }
+                        }
+                    }
+            } catch (e: Exception) {
+                // Lỗi
+            }
+        }
+    }
 
     /**
      * Lắng nghe sự thay đổi của ô nhập chữ và kích hoạt typing indicator.
@@ -123,6 +204,96 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             sendMessageUseCase(conversationId, newMessage)
         }
+    }
+
+    /**
+     * Gửi tin nhắn ảnh (type = "image").
+     * Upload ảnh lên Firebase Storage trước, phát tiến trình %, rồi gửi tin nhắn chứa URL.
+     */
+    fun sendImageMessage(bytes: ByteArray, fileName: String) {
+        _isUploading.value = true
+        _uploadProgress.value = 0
+        _uploadError.value = null
+
+        viewModelScope.launch {
+            messageRepository.uploadMedia(conversationId, "images", bytes, fileName)
+                .collect { state ->
+                    when (state) {
+                        is UploadState.Progress -> {
+                            _uploadProgress.value = state.percent
+                        }
+                        is UploadState.Success -> {
+                            _isUploading.value = false
+                            _uploadProgress.value = -1
+
+                            val imageMsg = Message(
+                                senderId = currentUserUid,
+                                senderName = currentUserName,
+                                receiverId = partnerId,
+                                content = "📷 Hình ảnh",
+                                timestamp = System.currentTimeMillis(),
+                                type = "image",
+                                mediaUrl = state.downloadUrl,
+                                seenBy = listOf(currentUserUid)
+                            )
+                            sendMessageUseCase(conversationId, imageMsg)
+                        }
+                        is UploadState.Error -> {
+                            _isUploading.value = false
+                            _uploadProgress.value = -1
+                            _uploadError.value = state.message
+                        }
+                    }
+                }
+        }
+    }
+
+    /**
+     * Gửi tin nhắn file đính kèm (type = "file").
+     * Upload file lên Firebase Storage, phát tiến trình %, rồi gửi tin nhắn chứa URL + metadata.
+     */
+    fun sendFileMessage(bytes: ByteArray, fileName: String, fileSize: Long) {
+        _isUploading.value = true
+        _uploadProgress.value = 0
+        _uploadError.value = null
+
+        viewModelScope.launch {
+            messageRepository.uploadMedia(conversationId, "files", bytes, fileName)
+                .collect { state ->
+                    when (state) {
+                        is UploadState.Progress -> {
+                            _uploadProgress.value = state.percent
+                        }
+                        is UploadState.Success -> {
+                            _isUploading.value = false
+                            _uploadProgress.value = -1
+
+                            val fileMsg = Message(
+                                senderId = currentUserUid,
+                                senderName = currentUserName,
+                                receiverId = partnerId,
+                                content = "📎 $fileName",
+                                timestamp = System.currentTimeMillis(),
+                                type = "file",
+                                mediaUrl = state.downloadUrl,
+                                fileName = fileName,
+                                fileSize = fileSize,
+                                seenBy = listOf(currentUserUid)
+                            )
+                            sendMessageUseCase(conversationId, fileMsg)
+                        }
+                        is UploadState.Error -> {
+                            _isUploading.value = false
+                            _uploadProgress.value = -1
+                            _uploadError.value = state.message
+                        }
+                    }
+                }
+        }
+    }
+
+    fun clearUploadError() {
+        _uploadError.value = null
     }
 
     /**

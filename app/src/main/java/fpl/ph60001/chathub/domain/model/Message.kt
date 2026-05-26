@@ -17,6 +17,10 @@ package fpl.ph60001.chathub.domain.model
  * @property reactions Map biểu cảm icon: userId -> emoji (Ví dụ: "uid1" -> "❤️").
  * @property isDeleted Đánh dấu nếu tin nhắn này đã bị xóa bởi người gửi.
  * @property isEdited Đánh dấu nếu tin nhắn này đã từng được sửa đổi nội dung.
+ * @property mediaUrl Đường dẫn URL tệp media trên Firebase Storage (ảnh/file/voice).
+ * @property fileName Tên tệp đính kèm gốc (ví dụ: "bao_cao.pdf").
+ * @property fileSize Dung lượng tệp đính kèm tính theo bytes.
+ * @property duration Thời lượng tin nhắn thoại tính theo milliseconds (dành cho voice message).
  */
 data class Message(
     val messageId: String = "",
@@ -32,5 +36,9 @@ data class Message(
     val replyTo: ReplyTo? = null,
     val reactions: Map<String, String> = emptyMap(),
     val isDeleted: Boolean = false,
-    val isEdited: Boolean = false
+    val isEdited: Boolean = false,
+    val mediaUrl: String = "",
+    val fileName: String = "",
+    val fileSize: Long = 0L,
+    val duration: Long = 0L
 )

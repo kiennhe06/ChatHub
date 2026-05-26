@@ -1,5 +1,8 @@
 package fpl.ph60001.chathub.presentation.chat
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -16,9 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,14 +28,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import fpl.ph60001.chathub.domain.model.Message
+import fpl.ph60001.chathub.domain.model.User
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -49,24 +54,108 @@ private val BubbleOtherColor = Color(0x661E293B)   // Xám gương mờ
 
 /**
  * Giao diện phòng Chat chi tiết (ChatScreen) hoàn chỉnh hỗ trợ đầy đủ các tính năng
- * nhắn tin thời gian thực cao cấp theo phong cách Premium Glassmorphism.
+ * nhắn tin thời gian thực cao cấp và đính kèm hình ảnh/tệp tin tuyệt đẹp phong cách Glassmorphism.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToGroupInfo: (String) -> Unit
 ) {
     val messages by viewModel.messagesList.collectAsState()
     val messageText by viewModel.messageText.collectAsState()
     val isPartnerTyping by viewModel.isPartnerTyping.collectAsState()
     val replyingTo by viewModel.replyingTo.collectAsState()
     val editingMessage by viewModel.editingMessage.collectAsState()
+    
+    val uploadProgress by viewModel.uploadProgress.collectAsState()
+    val isUploading by viewModel.isUploading.collectAsState()
+    val uploadError by viewModel.uploadError.collectAsState()
 
+    val groupMembers by viewModel.groupMembers.collectAsState()
+    val groupAvatar by viewModel.groupAvatar.collectAsState()
+    val groupNameFlow by viewModel.groupNameFlow.collectAsState()
+ 
+    val context = LocalContext.current
     val listState = rememberLazyListState()
 
     // Trạng thái hiển thị Dialog Menu tin nhắn được Long-press
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
+
+    // Tạo file tạm cho camera capture
+    val cameraFile = remember {
+        val cachePhotosDir = File(context.cacheDir, "camera_photos").apply { mkdirs() }
+        File(cachePhotosDir, "capture_${System.currentTimeMillis()}.jpg")
+    }
+    val cameraUri = remember {
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", cameraFile)
+    }
+
+    // Bộ chọn ảnh từ thư viện
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            val bytes = context.contentResolver.openInputStream(it)?.readBytes()
+            val fileName = "gallery_${System.currentTimeMillis()}.jpg"
+            if (bytes != null) {
+                viewModel.sendImageMessage(bytes, fileName)
+            }
+        }
+    }
+
+    // Trình chụp ảnh từ camera
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success) {
+            val bytes = cameraFile.readBytes()
+            val fileName = "camera_${System.currentTimeMillis()}.jpg"
+            viewModel.sendImageMessage(bytes, fileName)
+        }
+    }
+
+    // Yêu cầu cấp quyền CAMERA động trước khi kích hoạt chụp ảnh
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            cameraLauncher.launch(cameraUri)
+        } else {
+            android.widget.Toast.makeText(context, "Vui lòng cấp quyền CAMERA trong Cài đặt để sử dụng tính năng này!", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Trình chọn tệp đính kèm (PDF, Word, ZIP, etc)
+    val fileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            var fileName = "file_${System.currentTimeMillis()}"
+            var fileSize = 0L
+            context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (nameIdx != -1) fileName = cursor.getString(nameIdx)
+                    if (sizeIdx != -1) fileSize = cursor.getLong(sizeIdx)
+                }
+            }
+            val bytes = context.contentResolver.openInputStream(it)?.readBytes()
+            if (bytes != null) {
+                viewModel.sendFileMessage(bytes, fileName, fileSize)
+            }
+        }
+    }
+
+    // Hiển thị thông báo nếu xảy ra lỗi upload
+    LaunchedEffect(uploadError) {
+        uploadError?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.clearUploadError()
+        }
+    }
 
     // Tự động cuộn xuống dưới cùng khi có tin nhắn mới
     LaunchedEffect(messages.size, isPartnerTyping) {
@@ -109,31 +198,43 @@ fun ChatScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Avatar tròn đối phương
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable(enabled = viewModel.isGroup) {
+                                onNavigateToGroupInfo(viewModel.partnerId)
+                            }
+                        ) {
+                            // Avatar tròn đối phương/nhóm
                             Box(modifier = Modifier.size(40.dp)) {
+                                val avatarSource = if (viewModel.isGroup) {
+                                    if (groupAvatar.isEmpty()) "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=100" else groupAvatar
+                                } else {
+                                    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80"
+                                }
                                 AsyncImage(
-                                    model = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80",
+                                    model = avatarSource,
                                     contentDescription = viewModel.partnerName,
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF0F172A))
-                                        .padding(1.5.dp)
-                                        .align(Alignment.BottomEnd)
-                                ) {
+                                if (!viewModel.isGroup) {
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxSize()
+                                            .size(10.dp)
                                             .clip(CircleShape)
-                                            .background(GreenOnline)
-                                    )
+                                            .background(Color(0xFF0F172A))
+                                            .padding(1.5.dp)
+                                            .align(Alignment.BottomEnd)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(CircleShape)
+                                                .background(GreenOnline)
+                                        )
+                                    }
                                 }
                             }
 
@@ -141,16 +242,16 @@ fun ChatScreen(
 
                             Column {
                                 Text(
-                                    text = viewModel.partnerName,
+                                    text = if (viewModel.isGroup) { if (groupNameFlow.isEmpty()) viewModel.partnerName else groupNameFlow } else viewModel.partnerName,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
                                     color = Color.White
                                 )
                                 Text(
-                                    text = if (isPartnerTyping) "Đang nhập..." else "Đang trực tuyến",
+                                    text = if (viewModel.isGroup) "${groupMembers.size} thành viên" else if (isPartnerTyping) "Đang nhập..." else "Đang trực tuyến",
                                     fontSize = 11.sp,
-                                    color = if (isPartnerTyping) NeonBlue else Color.White.copy(alpha = 0.5f),
-                                    fontWeight = if (isPartnerTyping) FontWeight.Bold else FontWeight.Normal
+                                    color = if (isPartnerTyping && !viewModel.isGroup) NeonBlue else Color.White.copy(alpha = 0.5f),
+                                    fontWeight = if (isPartnerTyping && !viewModel.isGroup) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
                         }
@@ -167,6 +268,22 @@ fun ChatScreen(
                                 contentDescription = "Quay lại",
                                 tint = Color.White
                             )
+                        }
+                    },
+                    actions = {
+                        if (viewModel.isGroup) {
+                            IconButton(
+                                onClick = { onNavigateToGroupInfo(viewModel.partnerId) },
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.08f))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Thông tin nhóm",
+                                    tint = NeonBlue
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -204,6 +321,8 @@ fun ChatScreen(
                             isMe = isMe,
                             partnerName = viewModel.partnerName,
                             partnerId = viewModel.partnerId,
+                            isGroup = viewModel.isGroup,
+                            groupMembers = groupMembers,
                             onLongClick = {
                                 selectedMessageForMenu = message
                             }
@@ -303,7 +422,46 @@ fun ChatScreen(
                     }
                 }
 
-                // KHU VỰC 5: Ô NHẬP TIN NHẮN GLASSMORPHIC
+                // KHU VỰC 5: TIẾN TRÌNH UPLOAD FILE REALTIME
+                AnimatedVisibility(visible = isUploading) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(GlassCard)
+                            .border(BorderStroke(1.dp, GlassBorder.copy(alpha = 0.1f)))
+                            .padding(horizontal = 20.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Đang tải tệp lên... $uploadProgress%",
+                                color = NeonBlue,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            CircularProgressIndicator(
+                                color = NeonBlue,
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { uploadProgress.toFloat() / 100f },
+                            color = NeonBlue,
+                            trackColor = Color.White.copy(alpha = 0.1f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(CircleShape)
+                        )
+                    }
+                }
+
+                // KHU VỰC 6: Ô NHẬP TIN NHẮN GLASSMORPHIC & HÀNH ĐỘNG ĐÍNH KÈM
                 Surface(
                     color = GlassCard,
                     border = BorderStroke(1.dp, GlassBorder.copy(alpha = 0.1f)),
@@ -313,9 +471,37 @@ fun ChatScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(horizontal = 8.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Nút Thư viện ảnh
+                        IconButton(onClick = { galleryLauncher.launch("image/*") }) {
+                            Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = "Thư viện ảnh", tint = NeonBlue)
+                        }
+
+                        // Nút Chụp ảnh
+                        IconButton(onClick = {
+                            val hasCameraPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.CAMERA
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            
+                            if (hasCameraPermission) {
+                                cameraLauncher.launch(cameraUri)
+                            } else {
+                                cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                            }
+                        }) {
+                            Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Chụp ảnh", tint = NeonBlue)
+                        }
+
+                        // Nút File đính kèm
+                        IconButton(onClick = { fileLauncher.launch("*/*") }) {
+                            Icon(imageVector = Icons.Default.AttachFile, contentDescription = "Đính kèm file", tint = NeonBlue)
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
                         OutlinedTextField(
                             value = messageText,
                             onValueChange = { viewModel.onMessageTextChanged(it) },
@@ -341,7 +527,7 @@ fun ChatScreen(
                             singleLine = false
                         )
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
                         // Nút Gửi / Lưu Sửa tròn phát sáng
                         IconButton(
@@ -426,7 +612,7 @@ fun ChatScreen(
                         }
 
                         Spacer(modifier = Modifier.height(20.dp))
-                        Divider(color = Color.White.copy(alpha = 0.1f))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                         Spacer(modifier = Modifier.height(10.dp))
 
                         // Các nút Hành động trong danh sách menu dọc
@@ -441,14 +627,16 @@ fun ChatScreen(
                         }
 
                         if (isMsgMe && !msg.isDeleted) {
-                            TextButton(
-                                onClick = {
-                                    viewModel.setEditingMessage(msg)
-                                    selectedMessageForMenu = null
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(text = "✏️ Chỉnh sửa tin", color = NeonBlue, fontSize = 15.sp)
+                            if (msg.type == "text") {
+                                TextButton(
+                                    onClick = {
+                                        viewModel.setEditingMessage(msg)
+                                        selectedMessageForMenu = null
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(text = "✏️ Chỉnh sửa tin", color = NeonBlue, fontSize = 15.sp)
+                                }
                             }
 
                             TextButton(
@@ -456,7 +644,7 @@ fun ChatScreen(
                                     viewModel.deleteMessage(msg.messageId)
                                     selectedMessageForMenu = null
                                 },
-                                modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(text = "🗑️ Thu hồi tin nhắn", color = Color(0xFFFF5252), fontSize = 15.sp)
                             }
@@ -470,7 +658,7 @@ fun ChatScreen(
 
 /**
  * Thành phần bong bóng tin nhắn (Message Bubble) hai bên gửi/nhận cực kỳ sang trọng
- * với đầy đủ icon reaction, trạng thái tích xanh và phản hồi reply.
+ * với đầy đủ đính kèm hình ảnh, tệp tin, reaction, tích xanh và phản hồi reply.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -479,8 +667,11 @@ fun MessageBubble(
     isMe: Boolean,
     partnerName: String,
     partnerId: String,
+    isGroup: Boolean,
+    groupMembers: Map<String, User>,
     onLongClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val bubbleColor = if (isMe) BubbleMeColor else BubbleOtherColor
     val alignment = if (isMe) Alignment.End else Alignment.Start
     
@@ -496,6 +687,19 @@ fun MessageBubble(
             .padding(vertical = 2.dp),
         horizontalAlignment = alignment
     ) {
+        // Tên người gửi phía trên mỗi tin nhắn trong nhóm chat
+        if (isGroup && !isMe && !message.isDeleted) {
+            val senderProfile = groupMembers[message.senderId]
+            val senderDisplayName = senderProfile?.displayName ?: message.senderName
+            Text(
+                text = senderDisplayName,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = NeonBlue,
+                modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+            )
+        }
+
         // Hộp chính của bong bóng tin nhắn, hỗ trợ cả Long Click
         Box(
             modifier = Modifier
@@ -552,7 +756,7 @@ fun MessageBubble(
                     }
                 }
 
-                // PHẦN 2: NỘI DUNG VĂN BẢN TIN NHẮN CHÍNH
+                // PHẦN 2: NỘI DUNG CHÍNH (VĂN BẢN / ẢNH / FILE ĐÍNH KÈM)
                 if (message.isDeleted) {
                     Text(
                         text = "Tin nhắn đã bị thu hồi",
@@ -561,11 +765,108 @@ fun MessageBubble(
                         fontStyle = FontStyle.Italic
                     )
                 } else {
-                    Text(
-                        text = message.content,
-                        color = Color.White,
-                        fontSize = 14.sp
-                    )
+                    when (message.type) {
+                        "image" -> {
+                            var isFullScreenOpen by remember { mutableStateOf(false) }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { isFullScreenOpen = true }
+                            ) {
+                                AsyncImage(
+                                    model = message.mediaUrl,
+                                    contentDescription = "Ảnh đính kèm",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+
+                            if (isFullScreenOpen) {
+                                Dialog(onDismissRequest = { isFullScreenOpen = false }) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.95f))
+                                            .clickable { isFullScreenOpen = false },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        AsyncImage(
+                                            model = message.mediaUrl,
+                                            contentDescription = "Ảnh toàn màn hình",
+                                            modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                        IconButton(
+                                            onClick = { isFullScreenOpen = false },
+                                            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Close, contentDescription = "Đóng", tint = Color.White)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        "file" -> {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (message.mediaUrl.isNotEmpty()) {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(message.mediaUrl))
+                                            context.startActivity(intent)
+                                        }
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.InsertDriveFile,
+                                        contentDescription = "File đính kèm",
+                                        tint = NeonBlue,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = message.fileName.ifEmpty { "Tệp đính kèm" },
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = formatFileSize(message.fileSize),
+                                            fontSize = 10.sp,
+                                            color = Color.White.copy(alpha = 0.5f)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.FileDownload,
+                                        contentDescription = "Tải về",
+                                        tint = Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                        else -> {
+                            // Mặc định type = "text"
+                            Text(
+                                text = message.content,
+                                color = Color.White,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
                 }
 
                 // PHẦN 3: HIỂN THỊ CHỮ (ĐÃ SỬA) NẾU CÓ
@@ -619,8 +920,8 @@ fun MessageBubble(
                 color = Color.White.copy(alpha = 0.4f)
             )
 
-            // Hiển thị Tích Xanh Trạng thái tin nhắn đối với tin nhắn mình gửi
-            if (isMe && !message.isDeleted) {
+            // Hiển thị Tích Xanh Trạng thái tin nhắn đối với tin nhắn mình gửi (chỉ dành cho chat 1-1)
+            if (!isGroup && isMe && !message.isDeleted) {
                 Spacer(modifier = Modifier.width(4.dp))
                 val isSeen = message.seenBy.contains(partnerId)
                 Text(
@@ -630,6 +931,49 @@ fun MessageBubble(
                     color = if (isSeen) NeonBlue else Color.White.copy(alpha = 0.4f)
                 )
             }
+
+            // Hiển thị avatar những người đã xem tin nhắn này (dành cho nhóm)
+            val seenUsers = message.seenBy.filter { it != message.senderId }
+            if (isGroup && seenUsers.isNotEmpty() && !message.isDeleted) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy((-6).dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    seenUsers.take(4).forEach { seenUserId ->
+                        val userProfile = groupMembers[seenUserId]
+                        val avatarUrl = userProfile?.photoUrl ?: ""
+                        AsyncImage(
+                            model = if (avatarUrl.isEmpty()) "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=50&q=80" else avatarUrl,
+                            contentDescription = "Seen by",
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .border(1.dp, Color(0xFF0F172A), CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    if (seenUsers.size > 4) {
+                        Text(
+                            text = "+${seenUsers.size - 4}",
+                            fontSize = 8.sp,
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 2.dp)
+                        )
+                    }
+                }
+            }
         }
     }
+}
+
+/**
+ * Định dạng dung lượng tệp tin (bytes -> KB/MB/GB).
+ */
+private fun formatFileSize(size: Long): String {
+    if (size <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    val digitGroups = (Math.log10(size.toDouble()) / Math.log10(1024.0)).toInt()
+    return String.format(Locale.US, "%.1f %s", size / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
 }

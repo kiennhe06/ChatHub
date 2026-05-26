@@ -1,5 +1,6 @@
 package fpl.ph60001.chathub.data.repository
 
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
@@ -28,11 +29,15 @@ import javax.inject.Inject
  */
 class ChatRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val storage: FirebaseStorage
+    private val storage: FirebaseStorage,
+    private val auth: FirebaseAuth
 ) : ChatRepository {
 
     // Danh sách lưu trữ tạm thời tin nhắn trong Chế độ Demo
     private val demoMessagesMap = mutableMapOf<String, MutableList<Message>>()
+    
+    // Hỗ trợ chế độ offline cho nhóm chat
+    private val localGroupsMap = mutableMapOf<String, Conversation>()
     
     // Danh sách bạn bè demo phục vụ cho offline fallback (Ban đầu Linh là người gửi yêu cầu nên không nằm trong đây)
     private val mockFriendsList = mutableListOf("demo_partner_1", "demo_partner_2", "demo_partner_4")
@@ -141,8 +146,7 @@ class ChatRepositoryImpl @Inject constructor(
             val downloadUrl = storageRef.downloadUrl.await()
             Result.success(downloadUrl.toString())
         } catch (e: Exception) {
-            delay(1000)
-            Result.success("https://images.unsplash.com/photo-1579202673506-ca3ce28943ef?auto=format&fit=crop&w=400&q=80")
+            Result.failure(Exception("Lỗi tải ảnh lên: ${e.localizedMessage}. Vui lòng kích hoạt/nâng cấp Storage trên Firebase Console!"))
         }
     }
 
@@ -560,5 +564,185 @@ class ChatRepositoryImpl @Inject constructor(
             }
 
         awaitClose { listener.remove() }
+    }
+
+    override suspend fun createGroup(
+        groupName: String,
+        groupAvatar: String,
+        memberIds: List<String>
+    ): Result<String> {
+        val currentUserId = auth.currentUser?.uid ?: "demo_user_uid"
+        val finalMembers = (memberIds + currentUserId).distinct()
+        val groupId = firestore.collection("conversations").document().id
+
+        val conversation = Conversation(
+            id = groupId,
+            members = finalMembers,
+            lastMessage = "Nhóm mới đã được tạo!",
+            lastMessageTime = System.currentTimeMillis(),
+            unreadCount = 0,
+            partnerId = groupId,
+            partnerName = groupName,
+            partnerAvatar = groupAvatar,
+            partnerOnline = false,
+            isGroup = true,
+            groupName = groupName,
+            groupAvatar = groupAvatar,
+            adminIds = listOf(currentUserId)
+        )
+
+        return try {
+            val dto = ConversationDto.fromDomain(conversation)
+            firestore.collection("conversations").document(groupId).set(dto).await()
+
+            // Tạo tin nhắn hệ thống chào mừng
+            val systemMsg = Message(
+                messageId = UUID.randomUUID().toString(),
+                senderId = "system",
+                senderName = "Hệ thống",
+                receiverId = groupId,
+                content = "Chào mừng mọi người đến với nhóm \"$groupName\"!",
+                timestamp = System.currentTimeMillis(),
+                type = "text"
+            )
+            firestore.collection("conversations").document(groupId)
+                .collection("messages").document(systemMsg.messageId)
+                .set(MessageDto.fromDomain(systemMsg)).await()
+
+            Result.success(groupId)
+        } catch (e: Exception) {
+            // Lưu local phục vụ demo offline
+            localGroupsMap[groupId] = conversation
+            Result.success(groupId)
+        }
+    }
+
+    override fun getGroupInfo(groupId: String): Flow<Conversation?> = callbackFlow {
+        val currentUserId = auth.currentUser?.uid ?: "demo_user_uid"
+        val listener = firestore.collection("conversations")
+            .document(groupId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) {
+                    trySend(localGroupsMap[groupId])
+                    return@addSnapshotListener
+                }
+                val dto = snapshot.toObject(ConversationDto::class.java)
+                trySend(dto?.toDomain(currentUserId))
+            }
+        awaitClose { listener.remove() }
+    }
+
+    override suspend fun updateGroupInfo(
+        groupId: String,
+        newName: String,
+        newAvatar: String
+    ): Result<Unit> {
+        return try {
+            firestore.collection("conversations").document(groupId).update(
+                mapOf(
+                    "groupName" to newName,
+                    "groupAvatar" to newAvatar
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val local = localGroupsMap[groupId]
+            if (local != null) {
+                localGroupsMap[groupId] = local.copy(
+                    groupName = newName,
+                    groupAvatar = newAvatar,
+                    partnerName = newName,
+                    partnerAvatar = newAvatar
+                )
+            }
+            Result.success(Unit)
+        }
+    }
+
+    override suspend fun addGroupMembers(groupId: String, newMemberIds: List<String>): Result<Unit> {
+        return try {
+            firestore.collection("conversations").document(groupId).update(
+                "members", com.google.firebase.firestore.FieldValue.arrayUnion(*newMemberIds.toTypedArray())
+            ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val local = localGroupsMap[groupId]
+            if (local != null) {
+                localGroupsMap[groupId] = local.copy(
+                    members = (local.members + newMemberIds).distinct()
+                )
+            }
+            Result.success(Unit)
+        }
+    }
+
+    override suspend fun removeGroupMember(groupId: String, memberId: String): Result<Unit> {
+        return try {
+            firestore.collection("conversations").document(groupId).update(
+                "members", com.google.firebase.firestore.FieldValue.arrayRemove(memberId)
+            ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val local = localGroupsMap[groupId]
+            if (local != null) {
+                localGroupsMap[groupId] = local.copy(
+                    members = local.members.filter { it != memberId }
+                )
+            }
+            Result.success(Unit)
+        }
+    }
+
+    override suspend fun leaveGroup(groupId: String, userId: String): Result<Unit> {
+        return try {
+            val doc = firestore.collection("conversations").document(groupId).get().await()
+            val dto = doc.toObject(ConversationDto::class.java)
+            if (dto != null) {
+                val updatedMembers = dto.members.filter { it != userId }
+                if (updatedMembers.isEmpty()) {
+                    disbandGroup(groupId).getOrThrow()
+                } else {
+                    val updatedAdmins = dto.adminIds.filter { it != userId }.toMutableList()
+                    if (updatedAdmins.isEmpty() && updatedMembers.isNotEmpty()) {
+                        updatedAdmins.add(updatedMembers.first())
+                    }
+                    firestore.collection("conversations").document(groupId).update(
+                        mapOf(
+                            "members" to updatedMembers,
+                            "adminIds" to updatedAdmins
+                        )
+                    ).await()
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val local = localGroupsMap[groupId]
+            if (local != null) {
+                val updatedMembers = local.members.filter { it != userId }
+                if (updatedMembers.isEmpty()) {
+                    localGroupsMap.remove(groupId)
+                } else {
+                    val updatedAdmins = local.adminIds.filter { it != userId }.toMutableList()
+                    if (updatedAdmins.isEmpty()) {
+                        updatedAdmins.add(updatedMembers.first())
+                    }
+                    localGroupsMap[groupId] = local.copy(
+                        members = updatedMembers,
+                        adminIds = updatedAdmins
+                    )
+                }
+            }
+            Result.success(Unit)
+        }
+    }
+
+    override suspend fun disbandGroup(groupId: String): Result<Unit> {
+        return try {
+            firestore.collection("conversations").document(groupId).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            localGroupsMap.remove(groupId)
+            Result.success(Unit)
+        }
     }
 }

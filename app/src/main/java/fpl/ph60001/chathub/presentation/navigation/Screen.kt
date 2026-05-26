@@ -9,14 +9,20 @@ sealed class Screen(val route: String) {
     object Register : Screen("register")
     object Home : Screen("home")
     
-    // Màn hình chat yêu cầu truyền tham số ID người nhận và Tên người nhận
-    object Chat : Screen("chat/{partnerId}/{partnerName}") {
-        fun createRoute(partnerId: String, partnerName: String): String {
-            return "chat/$partnerId/$partnerName"
+    // Màn hình chat yêu cầu truyền tham số ID người nhận, Tên người nhận và cờ kiểm tra nhóm
+    object Chat : Screen("chat/{partnerId}/{partnerName}?isGroup={isGroup}") {
+        fun createRoute(partnerId: String, partnerName: String, isGroup: Boolean = false): String {
+            return "chat/$partnerId/$partnerName?isGroup=$isGroup"
         }
     }
     
     object Profile : Screen("profile")
     object ForgotPassword : Screen("forgot_password")
     object Search : Screen("search")
+    object CreateGroup : Screen("create_group")
+    object GroupInfo : Screen("group_info/{groupId}") {
+        fun createRoute(groupId: String): String {
+            return "group_info/$groupId"
+        }
+    }
 }

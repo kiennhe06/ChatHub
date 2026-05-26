@@ -42,7 +42,11 @@ data class MessageDto(
     @field:JvmField
     val isDeleted: Boolean = false,
     @field:JvmField
-    val isEdited: Boolean = false
+    val isEdited: Boolean = false,
+    val mediaUrl: String = "",
+    val fileName: String = "",
+    val fileSize: Long = 0L,
+    val duration: Long = 0L
 ) {
     /**
      * Chuyển đổi DTO thành Business Model trong lớp Domain.
@@ -62,7 +66,11 @@ data class MessageDto(
             replyTo = replyTo?.toDomain(),
             reactions = reactions,
             isDeleted = isDeleted,
-            isEdited = isEdited
+            isEdited = isEdited,
+            mediaUrl = mediaUrl,
+            fileName = fileName,
+            fileSize = fileSize,
+            duration = duration
         )
     }
 
@@ -85,7 +93,11 @@ data class MessageDto(
                 replyTo = ReplyToDto.fromDomain(message.replyTo),
                 reactions = message.reactions,
                 isDeleted = message.isDeleted,
-                isEdited = message.isEdited
+                isEdited = message.isEdited,
+                mediaUrl = message.mediaUrl,
+                fileName = message.fileName,
+                fileSize = message.fileSize,
+                duration = message.duration
             )
         }
     }

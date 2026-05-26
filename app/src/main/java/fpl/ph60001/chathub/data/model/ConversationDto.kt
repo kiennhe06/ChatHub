@@ -11,14 +11,18 @@ data class ConversationDto(
     val members: List<String> = emptyList(),
     val lastMessage: String = "",
     val lastMessageTime: Long = 0L,
-    val unreadCount: Int = 0
+    val unreadCount: Int = 0,
+    val isGroup: Boolean = false,
+    val groupName: String = "",
+    val groupAvatar: String = "",
+    val adminIds: List<String> = emptyList()
 ) {
     /**
      * Chuyển đổi DTO sang Business Model dùng cho lớp Domain và Presentation.
      * Tự động lấy thông tin đối phương (Partner) để người dùng hiển thị lên UI.
      */
     fun toDomain(currentUserId: String, partnerUser: User? = null): Conversation {
-        val partnerId = members.find { it != currentUserId } ?: ""
+        val partnerId = if (isGroup) id else (members.find { it != currentUserId } ?: "")
         return Conversation(
             id = id,
             members = members,
@@ -26,9 +30,13 @@ data class ConversationDto(
             lastMessageTime = lastMessageTime,
             unreadCount = unreadCount,
             partnerId = partnerId,
-            partnerName = partnerUser?.displayName ?: "Thành viên ChatHub",
-            partnerAvatar = partnerUser?.photoUrl ?: "",
-            partnerOnline = partnerUser?.isOnline ?: false
+            partnerName = if (isGroup) groupName else (partnerUser?.displayName ?: "Thành viên ChatHub"),
+            partnerAvatar = if (isGroup) groupAvatar else (partnerUser?.photoUrl ?: ""),
+            partnerOnline = if (isGroup) false else (partnerUser?.isOnline ?: false),
+            isGroup = isGroup,
+            groupName = groupName,
+            groupAvatar = groupAvatar,
+            adminIds = adminIds
         )
     }
 
@@ -42,7 +50,11 @@ data class ConversationDto(
                 members = conversation.members,
                 lastMessage = conversation.lastMessage,
                 lastMessageTime = conversation.lastMessageTime,
-                unreadCount = conversation.unreadCount
+                unreadCount = conversation.unreadCount,
+                isGroup = conversation.isGroup,
+                groupName = conversation.groupName,
+                groupAvatar = conversation.groupAvatar,
+                adminIds = conversation.adminIds
             )
         }
     }
