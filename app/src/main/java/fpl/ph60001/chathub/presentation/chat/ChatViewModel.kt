@@ -40,7 +40,9 @@ class ChatViewModel @Inject constructor(
 
     // Lấy ID và Tên đối phương từ tham số điều hướng
     val partnerId: String = checkNotNull(savedStateHandle["partnerId"])
-    val partnerName: String = checkNotNull(savedStateHandle["partnerName"])
+    val partnerName: String = java.net.URLDecoder.decode(
+        checkNotNull(savedStateHandle["partnerName"]), "UTF-8"
+    )
     val isGroup: Boolean = savedStateHandle["isGroup"] ?: false
 
     // Lấy UID người dùng hiện tại để phân biệt tin nhắn bên Trái/Phải

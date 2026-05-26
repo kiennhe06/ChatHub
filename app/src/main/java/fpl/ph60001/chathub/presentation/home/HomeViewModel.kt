@@ -8,6 +8,7 @@ import fpl.ph60001.chathub.domain.model.FriendRequest
 import fpl.ph60001.chathub.domain.model.User
 import fpl.ph60001.chathub.domain.repository.AuthRepository
 import fpl.ph60001.chathub.domain.repository.ChatRepository
+import fpl.ph60001.chathub.domain.repository.MessageRepository
 import fpl.ph60001.chathub.domain.usecase.GetConversationsUseCase
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -20,6 +21,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val chatRepository: ChatRepository,
+    private val messageRepository: MessageRepository,
     private val getConversationsUseCase: GetConversationsUseCase
 ) : ViewModel() {
 
@@ -132,5 +134,15 @@ class HomeViewModel @Inject constructor(
 
     fun resetLogoutState() {
         _isLoggedOut.value = false
+    }
+
+    /**
+     * Xóa cuộc trò chuyện và toàn bộ tin nhắn liên quan.
+     */
+    fun deleteConversation(conversationId: String) {
+        viewModelScope.launch {
+            chatRepository.deleteConversation(conversationId)
+            messageRepository.clearMockMessages(conversationId)
+        }
     }
 }

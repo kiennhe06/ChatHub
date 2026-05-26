@@ -104,6 +104,11 @@ interface ChatRepository {
     suspend fun createGroup(groupName: String, groupAvatar: String, memberIds: List<String>): Result<String>
 
     /**
+     * Xóa cuộc trò chuyện và toàn bộ tin nhắn liên quan.
+     */
+    suspend fun deleteConversation(conversationId: String): Result<Unit>
+
+    /**
      * Lấy thông tin nhóm chat thời gian thực.
      */
     fun getGroupInfo(groupId: String): Flow<Conversation?>

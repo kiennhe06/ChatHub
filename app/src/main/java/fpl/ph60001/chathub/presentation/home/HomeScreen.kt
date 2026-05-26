@@ -1,9 +1,11 @@
 package fpl.ph60001.chathub.presentation.home
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -12,15 +14,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.GroupAdd
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -34,15 +33,11 @@ import coil.compose.AsyncImage
 import fpl.ph60001.chathub.domain.model.Conversation
 import fpl.ph60001.chathub.domain.model.FriendRequest
 import fpl.ph60001.chathub.domain.model.User
+import fpl.ph60001.chathub.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Hệ màu Premium Glassmorphism tối sang trọng
-private val GlassCard = Color(0x331E293B)       // Thẻ gương mờ
-private val GlassBorder = Color(0x3364D2FF)     // Viền gương phát sáng Neon
-private val NeonBlue = Color(0xFF64D2FF)        // Xanh Neon chủ đạo
-private val NeonCyan = Color(0xFF00F2FE)        // Xanh Cyan
-private val GreenOnline = Color(0xFF4ADE80)     // Chấm xanh online tươi mới
+// Sử dụng Design System từ ChatHubTheme.kt
 
 /**
  * Giao diện trang chủ (HomeScreen) hiển thị danh sách hội thoại & bạn bè thời gian thực
@@ -67,6 +62,8 @@ fun HomeScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isLoggedOut by viewModel.isLoggedOut.collectAsState()
 
+    var conversationToDelete by remember { mutableStateOf<Conversation?>(null) }
+
     // Chuyển về màn hình đăng nhập khi đăng xuất thành công
     LaunchedEffect(isLoggedOut) {
         if (isLoggedOut) {
@@ -78,130 +75,144 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0F172A),
-                        Color(0xFF1E1E38),
-                        Color(0xFF0F172A)
-                    )
-                )
-            )
+            .background(DarkBg)
     ) {
-        // Vòng tròn phát sáng Neon trang trí nền ảo diệu
+        // Aurora glow trên nền
         Box(
             modifier = Modifier
                 .size(300.dp)
                 .align(Alignment.TopEnd)
-                .offset(x = 100.dp, y = (-50).dp)
+                .offset(x = 80.dp, y = (-60).dp)
+                .blur(80.dp)
                 .background(
                     brush = Brush.radialGradient(
-                        colors = listOf(
-                            NeonBlue.copy(alpha = 0.15f),
-                            Color.Transparent
-                        )
-                    )
+                        colors = listOf(PrimaryViolet.copy(alpha = 0.35f), Color.Transparent)
+                    ),
+                    shape = CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .align(Alignment.BottomStart)
+                .offset(x = (-40).dp, y = 40.dp)
+                .blur(60.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(AccentPink.copy(alpha = 0.2f), Color.Transparent)
+                    ),
+                    shape = CircleShape
                 )
         )
 
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                LargeTopAppBar(
+                TopAppBar(
                     title = {
-                        Column {
-                            Text(
-                                text = "ChatHub",
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 28.sp,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "Xin chào, ${currentUser?.displayName ?: "Thành viên"}",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = Color.White.copy(alpha = 0.6f)
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(PrimaryViolet, AccentPink)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Forum,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "ChatHub",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 20.sp,
+                                    color = TextPrimary,
+                                    letterSpacing = (-0.3).sp
+                                )
+                                Text(
+                                    text = currentUser?.displayName ?: "Thành viên",
+                                    fontSize = 12.sp,
+                                    color = TextSecondary
+                                )
+                            }
                         }
                     },
                     actions = {
-                        // Nút tạo nhóm chat
                         IconButton(
                             onClick = onNavigateToCreateGroup,
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(PrimaryViolet.copy(alpha = 0.15f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.GroupAdd,
                                 contentDescription = "Tạo nhóm",
-                                tint = NeonBlue
+                                tint = PrimaryViolet,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Nút xem hồ sơ cá nhân
+                        Spacer(modifier = Modifier.width(6.dp))
                         IconButton(
                             onClick = onNavigateToProfile,
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Person,
-                                contentDescription = "Xem hồ sơ",
-                                tint = NeonBlue
+                                contentDescription = "Hồ sơ",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Nút Cài đặt hệ thống
+                        Spacer(modifier = Modifier.width(6.dp))
                         IconButton(
                             onClick = onNavigateToSettings,
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = "Cài đặt",
-                                tint = NeonBlue
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        
                         Spacer(modifier = Modifier.width(8.dp))
                     },
-                    colors = TopAppBarDefaults.largeTopAppBarColors(
+                    colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
-                        titleContentColor = Color.White,
-                        actionIconContentColor = Color.White
+                        titleContentColor = TextPrimary
                     )
                 )
             },
             floatingActionButton = {
-                // Nút tìm kiếm Glassmorphic Floating Action Button nổi bật
                 FloatingActionButton(
-                    onClick = {
-                        onNavigateToSearch()
-                    },
+                    onClick = onNavigateToSearch,
                     containerColor = Color.Transparent,
                     elevation = FloatingActionButtonDefaults.elevation(0.dp),
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(NeonBlue, NeonCyan)
-                            )
-                        )
-                        .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(brush = GradientButton)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = "Tìm kiếm người dùng",
-                        tint = Color.Black,
-                        modifier = Modifier.size(28.dp)
+                        contentDescription = "Tìm kiếm",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
@@ -211,14 +222,14 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // Thanh Tab Switcher Glassmorphic cao cấp
+                // Tab switcher mới
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.05f))
-                        .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF1A1A2E))
+                        .border(1.dp, BorderColor, RoundedCornerShape(14.dp))
                         .padding(4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
@@ -228,23 +239,13 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(38.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .then(
-                                    if (isSelected) {
-                                        Modifier.background(
-                                            brush = Brush.horizontalGradient(
-                                                colors = listOf(NeonBlue.copy(alpha = 0.2f), NeonCyan.copy(alpha = 0.2f))
-                                            )
-                                        )
-                                    } else {
-                                        Modifier.background(Color.Transparent)
-                                    }
-                                )
-                                .border(
-                                    width = if (isSelected) 1.dp else 0.dp,
-                                    color = if (isSelected) NeonBlue.copy(alpha = 0.4f) else Color.Transparent,
-                                    shape = RoundedCornerShape(12.dp)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (isSelected)
+                                        Brush.horizontalGradient(listOf(PrimaryViolet, AccentIndigo))
+                                    else
+                                        Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
                                 )
                                 .clickable { viewModel.setSelectedTab(index) },
                             contentAlignment = Alignment.Center
@@ -255,7 +256,7 @@ fun HomeScreen(
                             ) {
                                 Text(
                                     text = title,
-                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.5f),
+                                    color = if (isSelected) Color.White else TextMuted,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     fontSize = 14.sp
                                 )
@@ -266,12 +267,12 @@ fun HomeScreen(
                                         modifier = Modifier
                                             .size(18.dp)
                                             .clip(CircleShape)
-                                            .background(NeonBlue),
+                                            .background(AccentPink),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = badgeCount.toString(),
-                                            color = Color.Black,
+                                            color = Color.White,
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.ExtraBold
                                         )
@@ -369,7 +370,8 @@ fun HomeScreen(
                                 items(conversations) { conversation ->
                                     GlassConversationItem(
                                         conversation = conversation,
-                                        onClick = { onNavigateToChat(conversation.partnerId, conversation.partnerName, conversation.isGroup) }
+                                        onClick = { onNavigateToChat(conversation.partnerId, conversation.partnerName, conversation.isGroup) },
+                                        onLongClick = { conversationToDelete = conversation }
                                     )
                                 }
                             }
@@ -467,6 +469,33 @@ fun HomeScreen(
                 }
             }
         }
+
+        if (conversationToDelete != null) {
+            val target = conversationToDelete!!
+            AlertDialog(
+                onDismissRequest = { conversationToDelete = null },
+                title = { Text("Xóa cuộc trò chuyện", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = { Text("Bạn có chắc chắn muốn xóa cuộc trò chuyện với \"${target.partnerName}\"? Hành động này sẽ xóa toàn bộ tin nhắn liên quan ở cả hai phía và không thể khôi phục lại.", color = Color.White.copy(alpha = 0.8f)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteConversation(target.id)
+                            conversationToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A))
+                    ) {
+                        Text("XÓA SẠCH", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { conversationToDelete = null }) {
+                        Text("HỦY BỎ", color = Color.White.copy(alpha = 0.6f))
+                    }
+                },
+                containerColor = Color(0xFF1E293B),
+                shape = RoundedCornerShape(24.dp)
+            )
+        }
     }
 }
 
@@ -530,113 +559,114 @@ fun OnlineBuddyItem(
 }
 
 /**
- * Item cuộc trò chuyện dọc phong cách gương mờ Glassmorphism (GlassConversationItem).
+ * Item cuộc trò chuyện mới (Premium Purple Aurora)
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GlassConversationItem(
     conversation: Conversation,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = GlassCard),
-        border = BorderStroke(1.dp, GlassBorder)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(DarkCard)
+            .border(
+                width = 1.dp,
+                brush = if (conversation.unreadCount > 0)
+                    Brush.horizontalGradient(listOf(PrimaryViolet.copy(alpha = 0.6f), AccentPink.copy(alpha = 0.3f)))
+                else
+                    Brush.horizontalGradient(listOf(BorderColor, BorderColor)),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(14.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier.size(54.dp),
-                contentAlignment = Alignment.BottomEnd
-            ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Avatar với gradient ring
+            Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.BottomEnd) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .size(50.dp)
                         .clip(CircleShape)
+                        .border(
+                            width = 2.dp,
+                            brush = if (conversation.partnerOnline)
+                                Brush.linearGradient(listOf(PrimaryViolet, AccentPink))
+                            else
+                                Brush.linearGradient(listOf(BorderColor, BorderColor)),
+                            shape = CircleShape
+                        )
                 ) {
                     AsyncImage(
-                        model = conversation.partnerAvatar.ifEmpty { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80" },
+                        model = conversation.partnerAvatar.ifEmpty { "https://ui-avatars.com/api/?name=${conversation.partnerName}&background=7C3AED&color=fff&size=100" },
                         contentDescription = conversation.partnerName,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
                         contentScale = ContentScale.Crop
                     )
                 }
-                
                 if (conversation.partnerOnline) {
                     Box(
                         modifier = Modifier
-                            .size(13.dp)
+                            .size(12.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF0F172A))
+                            .background(DarkBg)
                             .padding(2.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape)
-                                .background(GreenOnline)
-                        )
+                        Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(OnlineGreen))
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = conversation.partnerName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = conversation.lastMessage,
-                    fontSize = 13.sp,
-                    color = Color.White.copy(alpha = if (conversation.unreadCount > 0) 0.9f else 0.5f),
-                    fontWeight = if (conversation.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = formatTime(conversation.lastMessageTime),
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.4f),
-                    fontWeight = FontWeight.Normal
-                )
-                
-                if (conversation.unreadCount > 0) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(NeonBlue),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = conversation.unreadCount.toString(),
-                            color = Color.Black,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = conversation.partnerName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = formatTime(conversation.lastMessageTime),
+                        fontSize = 11.sp,
+                        color = if (conversation.unreadCount > 0) PrimaryViolet else TextMuted
+                    )
+                }
+                Spacer(modifier = Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = conversation.lastMessage,
+                        fontSize = 13.sp,
+                        color = if (conversation.unreadCount > 0) TextPrimary else TextSecondary,
+                        fontWeight = if (conversation.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (conversation.unreadCount > 0) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    brush = Brush.linearGradient(listOf(PrimaryViolet, AccentPink))
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = conversation.unreadCount.toString(),
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
                     }
                 }
             }
@@ -767,7 +797,7 @@ fun GlassFriendListItem(
 }
 
 /**
- * Component hiển thị Lời mời kết bạn phong cách Glassmorphism (GlassFriendRequestItem).
+ * Lời mời kết bạn Premium Aurora
  */
 @Composable
 fun GlassFriendRequestItem(
@@ -775,93 +805,69 @@ fun GlassFriendRequestItem(
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = GlassCard),
-        border = BorderStroke(1.dp, GlassBorder)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(DarkCard)
+            .border(
+                1.dp,
+                Brush.horizontalGradient(listOf(PrimaryViolet.copy(0.5f), AccentPink.copy(0.3f))),
+                RoundedCornerShape(18.dp)
+            )
+            .padding(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Ảnh đại diện
-            Box(
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AsyncImage(
+                model = request.senderAvatar.ifEmpty { "https://ui-avatars.com/api/?name=${request.senderName}&background=7C3AED&color=fff&size=100" },
+                contentDescription = request.senderName,
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-            ) {
-                AsyncImage(
-                    model = request.senderAvatar.ifEmpty { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80" },
-                    contentDescription = request.senderName,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
+                    .border(1.dp, Brush.linearGradient(listOf(PrimaryViolet, AccentPink)), CircleShape),
+                contentScale = ContentScale.Crop
+            )
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-            // Tên và thông báo mời
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = request.senderName,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = Color.White
+                    fontSize = 14.sp,
+                    color = TextPrimary
                 )
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Muốn kết bạn với bạn",
+                    text = "Muốn kết bạn với bạn 👋",
                     fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.5f)
+                    color = TextSecondary
                 )
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Nút Đồng ý
-            Button(
-                onClick = onAccept,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = NeonBlue,
-                    contentColor = Color.Black
-                ),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                modifier = Modifier.height(34.dp)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(brush = GradientButton)
+                    .clickable(onClick = onAccept)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = "Đồng ý",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
+                Text("Đồng ý", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
-            // Nút Từ chối
-            Button(
-                onClick = onDecline,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.08f),
-                    contentColor = Color(0xFFFF5252)
-                ),
-                border = BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                modifier = Modifier.height(34.dp)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(ErrorRed.copy(alpha = 0.12f))
+                    .border(1.dp, ErrorRed.copy(0.3f), RoundedCornerShape(10.dp))
+                    .clickable(onClick = onDecline)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = "Từ chối",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Từ chối", color = ErrorRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

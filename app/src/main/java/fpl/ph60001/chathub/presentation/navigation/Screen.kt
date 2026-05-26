@@ -12,7 +12,8 @@ sealed class Screen(val route: String) {
     // Màn hình chat yêu cầu truyền tham số ID người nhận, Tên người nhận và cờ kiểm tra nhóm
     object Chat : Screen("chat/{partnerId}/{partnerName}?isGroup={isGroup}") {
         fun createRoute(partnerId: String, partnerName: String, isGroup: Boolean = false): String {
-            return "chat/$partnerId/$partnerName?isGroup=$isGroup"
+            val encodedName = java.net.URLEncoder.encode(partnerName, "UTF-8")
+            return "chat/$partnerId/$encodedName?isGroup=$isGroup"
         }
     }
     

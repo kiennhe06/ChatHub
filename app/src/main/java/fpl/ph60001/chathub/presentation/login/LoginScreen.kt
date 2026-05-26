@@ -2,27 +2,19 @@ package fpl.ph60001.chathub.presentation.login
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -37,13 +29,8 @@ import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
-import fpl.ph60001.chathub.ui.theme.GradientEnd
-import fpl.ph60001.chathub.ui.theme.GradientStart
+import fpl.ph60001.chathub.ui.theme.*
 
-/**
- * Giao diện màn hình Đăng nhập (LoginScreen) phong cách Premium Glassmorphism.
- * Giao diện được tối ưu hóa hiển thị, chống tràn màn hình và thiết kế hiện đại sang trọng.
- */
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel,
@@ -58,12 +45,9 @@ fun LoginScreen(
     val isLoginSuccess by viewModel.isLoginSuccess.collectAsState()
 
     var isPasswordVisible by remember { mutableStateOf(false) }
-    var rememberMe by remember { mutableStateOf(false) } // State cho Checkbox Ghi nhớ
     val scrollState = rememberScrollState()
-
     val context = LocalContext.current
 
-    // Cấu hình launcher nhận kết quả xác thực từ Intent Google
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -71,18 +55,13 @@ fun LoginScreen(
         try {
             val account = task.getResult(ApiException::class.java)
             val idToken = account?.idToken
-            if (idToken != null) {
-                // Đăng nhập Firebase Auth thành công bằng ID Token thật
-                viewModel.loginWithGoogle(idToken)
-            } else {
-                viewModel.onGoogleSignInFailed("Không tìm thấy Google ID Token hợp lệ.")
-            }
+            if (idToken != null) viewModel.loginWithGoogle(idToken)
+            else viewModel.onGoogleSignInFailed("Không tìm thấy Google ID Token hợp lệ.")
         } catch (e: ApiException) {
-            viewModel.onGoogleSignInFailed("Lỗi đăng nhập Google: ${e.localizedMessage ?: "Mã lỗi: " + e.statusCode}")
+            viewModel.onGoogleSignInFailed("Lỗi đăng nhập Google: ${e.statusCode}")
         }
     }
 
-    // Cấu hình GoogleSignInClient lấy Web Client ID tự động từ google-services.json
     val googleSignInClient = remember {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(context.getString(fpl.ph60001.chathub.R.string.default_web_client_id))
@@ -101,233 +80,239 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0F172A), // Slate 900
-                        Color(0xFF1E293B)  // Slate 800
-                    )
-                )
-            )
+            .background(DarkBg)
     ) {
-        // Hiệu ứng các đốm sáng Neon mờ ảo ở nền sau (Glowing Orbs)
+        // --- Hiệu ứng ánh sáng nền (Aurora Orbs) ---
         Box(
             modifier = Modifier
-                .size(250.dp)
-                .offset(x = (-80).dp, y = (-50).dp)
-                .clip(CircleShape)
-                .background(Color(0xFF0A84FF).copy(alpha = 0.15f))
+                .size(320.dp)
+                .offset(x = (-100).dp, y = (-80).dp)
+                .blur(80.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0x507C3AED), Color.Transparent)
+                    ),
+                    shape = CircleShape
+                )
         )
         Box(
             modifier = Modifier
-                .size(300.dp)
+                .size(280.dp)
                 .align(Alignment.BottomEnd)
-                .offset(x = 100.dp, y = 100.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF64D2FF).copy(alpha = 0.1f))
+                .offset(x = 80.dp, y = 80.dp)
+                .blur(60.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0x40EC4899), Color.Transparent)
+                    ),
+                    shape = CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .align(Alignment.BottomStart)
+                .offset(x = (-40).dp, y = 60.dp)
+                .blur(50.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0x306366F1), Color.Transparent)
+                    ),
+                    shape = CircleShape
+                )
         )
 
-        // Nội dung chính có thể cuộn cuộn được chống tràn
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .navigationBarsPadding()
                 .imePadding()
                 .verticalScroll(scrollState),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(60.dp))
+            Spacer(modifier = Modifier.height(72.dp))
 
-            // Logo & Tiêu đề chính (Sử dụng biểu tượng Forum đại diện cho ChatHub
+            // --- Logo với hiệu ứng ring ---
             Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(Color(0xFF00C6FF), Color(0xFF0072FF))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(96.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Forum,
-                    contentDescription = "Logo",
-                    tint = Color.White,
-                    modifier = Modifier.size(40.dp)
+                // Outer ring glow
+                Box(
+                    modifier = Modifier
+                        .size(96.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(Color(0x40A855F7), Color.Transparent)
+                            )
+                        )
                 )
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(PrimaryViolet, AccentPink)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Forum,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(38.dp)
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Text(
                 text = "ChatHub",
-                color = Color.White,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.sp
+                color = TextPrimary,
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-0.5).sp
             )
-
             Text(
-                text = "Kết nối tức thì - Sẻ chia yêu thương",
-                color = Color.White.copy(alpha = 0.6f),
+                text = "Kết nối tức thì • Sẻ chia yêu thương",
+                color = TextSecondary,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 4.dp, bottom = 32.dp)
+                modifier = Modifier.padding(top = 6.dp, bottom = 36.dp)
             )
 
-            // Thẻ kính mờ đăng nhập Glassmorphism Card
-            Card(
+            // --- Card đăng nhập ---
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF1E293B).copy(alpha = 0.85f)
-                ),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "ĐĂNG NHẬP",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64D2FF),
-                        letterSpacing = 1.5.sp,
-                        modifier = Modifier.padding(bottom = 20.dp)
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color(0xFF1C1B33), Color(0xFF161527))
+                        )
                     )
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0x557C3AED),
+                                Color(0x20EC4899),
+                                Color(0x30A855F7)
+                            )
+                        ),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .padding(24.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Tiêu đề nhỏ trong card
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(1.dp)
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(Color.Transparent, BorderColor)
+                                    )
+                                )
+                        )
+                        Text(
+                            text = "  ĐĂNG NHẬP  ",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryViolet,
+                            letterSpacing = 2.sp
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(1.dp)
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(BorderColor, Color.Transparent)
+                                    )
+                                )
+                        )
+                    }
 
-                    // Trường nhập Email
-                    OutlinedTextField(
+                    // Email field
+                    PremiumTextField(
                         value = email,
                         onValueChange = { viewModel.onEmailChanged(it) },
-                        placeholder = { Text("Địa chỉ Email", color = Color.White.copy(alpha = 0.4f)) },
-                        leadingIcon = {
-                            Icon(imageVector = Icons.Default.Email, contentDescription = null, tint = Color(0xFF64D2FF))
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color(0xFF0F172A).copy(alpha = 0.5f),
-                            unfocusedContainerColor = Color(0xFF0F172A).copy(alpha = 0.3f),
-                            focusedBorderColor = Color(0xFF00C6FF),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
-                            focusedPlaceholderColor = Color.White.copy(alpha = 0.4f),
-                            unfocusedPlaceholderColor = Color.White.copy(alpha = 0.4f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = "Địa chỉ Email",
+                        leadingIcon = Icons.Default.Email,
+                        keyboardType = KeyboardType.Email
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    // Trường nhập Mật khẩu
-                    OutlinedTextField(
+                    // Password field
+                    PremiumTextField(
                         value = password,
                         onValueChange = { viewModel.onPasswordChanged(it) },
-                        placeholder = { Text("Mật khẩu", color = Color.White.copy(alpha = 0.4f)) },
-                        leadingIcon = {
-                            Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color(0xFF64D2FF))
-                        },
-                        visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
-                                Icon(
-                                    imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (isPasswordVisible) "Ẩn mật khẩu" else "Hiện mật khẩu",
-                                    tint = Color(0xFF64D2FF)
-                                )
-                            }
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color(0xFF0F172A).copy(alpha = 0.5f),
-                            unfocusedContainerColor = Color(0xFF0F172A).copy(alpha = 0.3f),
-                            focusedBorderColor = Color(0xFF00C6FF),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
-                            focusedPlaceholderColor = Color.White.copy(alpha = 0.4f),
-                            unfocusedPlaceholderColor = Color.White.copy(alpha = 0.4f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = "Mật khẩu",
+                        leadingIcon = Icons.Default.Lock,
+                        keyboardType = KeyboardType.Password,
+                        isPassword = true,
+                        isPasswordVisible = isPasswordVisible,
+                        onTogglePassword = { isPasswordVisible = !isPasswordVisible }
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Dòng Ghi nhớ đăng nhập Checkbox & Quên mật khẩu
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = rememberMe,
-                                onCheckedChange = { rememberMe = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = Color(0xFF00C6FF),
-                                    uncheckedColor = Color.White.copy(alpha = 0.3f),
-                                    checkmarkColor = Color.White
-                                )
-                            )
-                            Text(
-                                text = "Ghi nhớ",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        
+                    // Quên mật khẩu
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                         TextButton(
                             onClick = onNavigateToForgotPassword,
-                            contentPadding = PaddingValues(0.dp)
+                            contentPadding = PaddingValues(horizontal = 0.dp)
                         ) {
                             Text(
                                 text = "Quên mật khẩu?",
-                                color = Color(0xFF64D2FF),
+                                color = AccentPink,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
 
-                    // Thông báo lỗi nếu có bằng tiếng Việt
+                    // Thông báo lỗi
                     AnimatedVisibility(
                         visible = errorMessage != null,
-                        enter = fadeIn(),
-                        exit = fadeOut()
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
                     ) {
                         errorMessage?.let {
-                            Text(
-                                text = it,
-                                color = Color(0xFFFF453A),
-                                fontSize = 13.sp,
-                                textAlign = TextAlign.Center,
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 16.dp)
-                            )
+                                    .padding(bottom = 12.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(ErrorRed.copy(alpha = 0.12f))
+                                    .border(1.dp, ErrorRed.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Text(
+                                    text = it,
+                                    color = ErrorRed,
+                                    fontSize = 13.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
 
-                    // Nút Đăng nhập Gradient phát sáng
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Nút đăng nhập
                     Button(
                         onClick = { viewModel.login() },
                         enabled = !isLoading,
@@ -342,25 +327,23 @@ fun LoginScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = if (isLoading) {
-                                            listOf(Color.Gray, Color.Gray)
-                                        } else {
-                                            listOf(Color(0xFF00C6FF), Color(0xFF0072FF))
-                                        }
-                                    )
+                                    brush = if (isLoading) Brush.horizontalGradient(listOf(TextMuted, TextMuted))
+                                    else GradientButton
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
                             if (isLoading) {
-                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp
+                                )
                             } else {
                                 Text(
-                                    text = "ĐĂNG NHẬP",
+                                    text = "Đăng nhập",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    letterSpacing = 1.sp
+                                    fontSize = 16.sp
                                 )
                             }
                         }
@@ -368,35 +351,32 @@ fun LoginScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Hoặc đăng nhập bằng
+                    // Divider "Hoặc"
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.08f))
+                        HorizontalDivider(modifier = Modifier.weight(1f), color = BorderColor)
                         Text(
-                            text = " Hoặc đăng nhập bằng ",
-                            fontSize = 11.sp,
-                            color = Color.White.copy(alpha = 0.4f)
+                            text = "  hoặc  ",
+                            fontSize = 12.sp,
+                            color = TextMuted
                         )
-                        HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.08f))
+                        HorizontalDivider(modifier = Modifier.weight(1f), color = BorderColor)
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Nút Google Sign-In thật
+                    // Nút Google
                     OutlinedButton(
-                        onClick = {
-                            // Gọi Google Sign-In intent thật của Google Play Services
-                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                        },
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                        onClick = { googleSignInLauncher.launch(googleSignInClient.signInIntent) },
+                        border = BorderStroke(1.dp, BorderColor),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
+                            .height(50.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = Color(0xFF0F172A).copy(alpha = 0.3f)
+                            containerColor = Color(0xFF0F0F1F)
                         )
                     ) {
                         Row(
@@ -404,34 +384,99 @@ fun LoginScreen(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = "G  ",
+                                text = "G",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color(0xFFEA4335)
                             )
+                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "Tiếp tục với Google",
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    // Chưa có tài khoản
-                    TextButton(onClick = onNavigateToRegister) {
+                    // Đăng ký
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text(
-                            text = "Chưa có tài khoản? Đăng ký ngay",
-                            color = Color(0xFF64D2FF),
+                            text = "Chưa có tài khoản? ",
+                            color = TextSecondary,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "Đăng ký ngay",
+                            color = PrimaryViolet,
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { onNavigateToRegister() }
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(40.dp))
+
+            Spacer(modifier = Modifier.height(48.dp))
         }
     }
+}
+
+@Composable
+private fun PremiumTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    isPassword: Boolean = false,
+    isPasswordVisible: Boolean = false,
+    onTogglePassword: (() -> Unit)? = null
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = {
+            Text(placeholder, color = TextMuted, fontSize = 14.sp)
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = leadingIcon,
+                contentDescription = null,
+                tint = PrimaryViolet,
+                modifier = Modifier.size(20.dp)
+            )
+        },
+        trailingIcon = if (isPassword) {
+            {
+                IconButton(onClick = { onTogglePassword?.invoke() }) {
+                    Icon(
+                        imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        } else null,
+        visualTransformation = if (isPassword && !isPasswordVisible) PasswordVisualTransformation() else VisualTransformation.None,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = TextPrimary,
+            unfocusedTextColor = TextPrimary,
+            focusedContainerColor = Color(0xFF0F0F1F),
+            unfocusedContainerColor = Color(0xFF0D0D1A),
+            focusedBorderColor = PrimaryViolet,
+            unfocusedBorderColor = BorderColor,
+            cursorColor = PrimaryViolet
+        ),
+        modifier = Modifier.fillMaxWidth()
+    )
 }

@@ -93,26 +93,36 @@ class MessageRepositoryImpl @Inject constructor(
             .orderBy("timestamp", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
-                    // Fallback sang dữ liệu mẫu động khớp chính xác UID người dùng
-                    val localList = mockMessagesMap.getOrPut(cleanRoomKey) { 
-                        generateDynamicMockMessages(cleanRoomKey)
+                    // Lỗi kết nối → dùng mock data (demo) hoặc local cache
+                    val isDemoConversation = cleanRoomKey.contains("demo_partner")
+                    if (isDemoConversation) {
+                        val localList = mockMessagesMap.getOrPut(cleanRoomKey) {
+                            generateDynamicMockMessages(cleanRoomKey)
+                        }
+                        trySend(localList.toList())
+                    } else {
+                        val localList = mockMessagesMap[cleanRoomKey]?.toList() ?: emptyList()
+                        trySend(localList)
                     }
-                    trySend(localList.toList())
                     return@addSnapshotListener
                 }
 
-                val messages = snapshot.documents.mapNotNull { doc ->
+                val firestoreMessages = snapshot.documents.mapNotNull { doc ->
                     doc.toObject(MessageDto::class.java)?.toDomain()
                 }
-                
-                if (messages.isEmpty()) {
-                    val localList = mockMessagesMap.getOrPut(cleanRoomKey) { 
-                        generateDynamicMockMessages(cleanRoomKey)
-                    }
-                    trySend(localList.toList())
-                } else {
-                    trySend(messages)
-                }
+
+                // Xóa các tin nhắn "optimistic" đã được Firestore xác nhận khỏi local cache
+                // để tránh tình trạng tin nhắn cũ từ phòng khác bị lọt vào
+                val confirmedIds = firestoreMessages.map { it.messageId }.toSet()
+                mockMessagesMap[cleanRoomKey]?.removeAll { it.messageId in confirmedIds }
+
+                // Chỉ gộp các tin nhắn "optimistic" thực sự chưa được Firestore xác nhận
+                val localPending = mockMessagesMap[cleanRoomKey]
+                    ?.filter { local -> local.messageId !in confirmedIds }
+                    ?: emptyList()
+
+                val merged = (firestoreMessages + localPending).sortedBy { it.timestamp }
+                trySend(merged)
             }
 
         awaitClose { listener.remove() }
@@ -128,21 +138,30 @@ class MessageRepositoryImpl @Inject constructor(
         val finalMessage = message.copy(messageId = docRef.id, timestamp = System.currentTimeMillis())
         val dto = MessageDto.fromDomain(finalMessage)
 
-        var isFirestoreSuccess = false
+        // OPTIMISTIC UPDATE: Thêm vào local cache NGAY LẬP TỨC để UI hiển thị không chờ Firestore
+        val localList = mockMessagesMap.getOrPut(cleanRoomKey) { mutableListOf() }
+        localList.add(finalMessage)
+
         try {
+            // Ghi lên Firestore - realtime listener sẽ đồng bộ lại và xoá bản local khỏi "pending"
             docRef.set(dto).await()
-            firestore.collection("conversations").document(cleanRoomKey).update(
-                mapOf(
-                    "lastMessage" to message.content.ifEmpty { "[Hình ảnh]" },
-                    "lastMessageTime" to finalMessage.timestamp
-                )
-            ).await()
-            isFirestoreSuccess = true
         } catch (e: Exception) {
-            val localList = mockMessagesMap.getOrPut(cleanRoomKey) { 
-                generateDynamicMockMessages(cleanRoomKey)
-            }
-            localList.add(finalMessage)
+            // Firestore thất bại → local cache vẫn đang giữ tin nhắn, UI đã hiển thị rồi
+            return@runCatching
+        }
+
+        try {
+            // Cập nhật lastMessage dùng merge để tránh lỗi field chưa tồn tại
+            firestore.collection("conversations").document(cleanRoomKey)
+                .set(
+                    mapOf(
+                        "lastMessage" to message.content.ifEmpty { "[Hình ảnh]" },
+                        "lastMessageTime" to finalMessage.timestamp
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                ).await()
+        } catch (e: Exception) {
+            // Bỏ qua lỗi meta-update
         }
     }
 
@@ -326,16 +345,20 @@ class MessageRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Giúp tạo key phòng hội thoại chuẩn hóa (RoomKey) sắp xếp theo alphabet UIDs.
+     * Giúp tạo key phòng hội thoại chuẩn hóa (RoomKey).
+     * - Nếu là chat 1-1: sắp xếp 2 UID theo alphabet để tạo key nhất quán.
+     * - Nếu là nhóm (groupId không có dạng uid_uid): giữ nguyên groupId.
      */
     private fun getCleanKey(id: String): String {
-        return if (id.contains("_")) {
-            val parts = id.split("_")
-            if (parts.size == 2) {
-                if (parts[0] < parts[1]) "${parts[0]}_${parts[1]}" else "${parts[1]}_${parts[0]}"
-            } else id
+        if (id.isEmpty()) return "unknown_room"
+        // Chỉ sắp xếp nếu ĐÚNG dạng uid_uid (2 phần, mỗi phần không rỗng)
+        val parts = id.split("_")
+        return if (parts.size == 2 && parts[0].isNotEmpty() && parts[1].isNotEmpty()) {
+            // Chat 1-1: sắp xếp để key nhất quán
+            if (parts[0] < parts[1]) "${parts[0]}_${parts[1]}" else "${parts[1]}_${parts[0]}"
         } else {
-            "demo_user_uid_partner_uid"
+            // Nhóm chat hoặc ID đặc biệt: giữ nguyên
+            id
         }
     }
 

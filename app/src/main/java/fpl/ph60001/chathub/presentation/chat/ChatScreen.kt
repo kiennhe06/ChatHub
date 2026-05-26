@@ -24,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -43,14 +44,11 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Hệ màu Premium Glassmorphism
-private val GlassCard = Color(0x331E293B)
-private val GlassBorder = Color(0x3364D2FF)
-private val NeonBlue = Color(0xFF64D2FF)
-private val NeonCyan = Color(0xFF00F2FE)
-private val GreenOnline = Color(0xFF4ADE80)
-private val BubbleMeColor = Color(0xFF0284C7)      // Xanh đại dương bóng bẩy
-private val BubbleOtherColor = Color(0x661E293B)   // Xám gương mờ
+import fpl.ph60001.chathub.ui.theme.*
+
+// Alias cho ChatScreen
+private val BubbleMeGrad = Brush.linearGradient(listOf(Color(0xFF7C3AED), Color(0xFF6D28D9)))
+private val BubbleOtherBg = Color(0xFF1E1B4B)
 
 /**
  * Giao diện phòng Chat chi tiết (ChatScreen) hoàn chỉnh hỗ trợ đầy đủ các tính năng
@@ -82,7 +80,6 @@ fun ChatScreen(
 
     // Trạng thái hiển thị Dialog Menu tin nhắn được Long-press
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
-    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     // Tạo file tạm cho camera capture
     val cameraFile = remember {
@@ -168,29 +165,20 @@ fun ChatScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0F172A),
-                        Color(0xFF1E1E38),
-                        Color(0xFF0F172A)
-                    )
-                )
-            )
+            .background(DarkBg)
     ) {
-        // Vòng tròn phát sáng Neon trang trí nền ảo diệu
+        // Aurora glow trên nền
         Box(
             modifier = Modifier
-                .size(300.dp)
-                .align(Alignment.TopStart)
-                .offset(x = (-120).dp, y = (-80).dp)
+                .size(280.dp)
+                .align(Alignment.TopCenter)
+                .offset(y = (-80).dp)
+                .blur(80.dp)
                 .background(
                     brush = Brush.radialGradient(
-                        colors = listOf(
-                            NeonBlue.copy(alpha = 0.12f),
-                            Color.Transparent
-                        )
-                    )
+                        colors = listOf(PrimaryViolet.copy(alpha = 0.3f), Color.Transparent)
+                    ),
+                    shape = CircleShape
                 )
         )
 
@@ -246,12 +234,12 @@ fun ChatScreen(
                                     text = if (viewModel.isGroup) { if (groupNameFlow.isEmpty()) viewModel.partnerName else groupNameFlow } else viewModel.partnerName,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
-                                    color = Color.White
+                                    color = TextPrimary
                                 )
                                 Text(
                                     text = if (viewModel.isGroup) "${groupMembers.size} thành viên" else if (isPartnerTyping) "Đang nhập..." else "Đang trực tuyến",
                                     fontSize = 11.sp,
-                                    color = if (isPartnerTyping && !viewModel.isGroup) NeonBlue else Color.White.copy(alpha = 0.5f),
+                                    color = if (isPartnerTyping && !viewModel.isGroup) PrimaryViolet else TextSecondary,
                                     fontWeight = if (isPartnerTyping && !viewModel.isGroup) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
@@ -286,22 +274,11 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        
-                        IconButton(
-                            onClick = { showClearHistoryDialog = true },
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Xóa lịch sử cuộc trò chuyện",
-                                tint = Color(0xFFFF5252)
-                            )
-                        }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = DarkBg,
+                        titleContentColor = TextPrimary
+                    ),
                 )
             }
         ) { innerPadding ->
@@ -477,9 +454,9 @@ fun ChatScreen(
 
                 // KHU VỰC 6: Ô NHẬP TIN NHẮN GLASSMORPHIC & HÀNH ĐỘNG ĐÍNH KÈM
                 Surface(
-                    color = GlassCard,
-                    border = BorderStroke(1.dp, GlassBorder.copy(alpha = 0.1f)),
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                    color = DarkCard,
+                    border = BorderStroke(1.dp, BorderColor),
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -521,19 +498,20 @@ fun ChatScreen(
                             onValueChange = { viewModel.onMessageTextChanged(it) },
                             placeholder = { 
                                 Text(
-                                    text = if (editingMessage != null) "Sửa tin nhắn..." else "Nhập tin nhắn...",
-                                    color = Color.White.copy(alpha = 0.4f)
+                                    text = if (editingMessage != null) "Sửa tin nhắn..." else "Nhắp tin nhắn...",
+                                    color = TextMuted, fontSize = 14.sp
                                 ) 
                             },
                             maxLines = 4,
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(20.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = NeonBlue,
-                                unfocusedBorderColor = GlassBorder,
-                                focusedContainerColor = Color(0x330F172A),
-                                unfocusedContainerColor = Color(0x330F172A)
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = PrimaryViolet,
+                                unfocusedBorderColor = BorderColor,
+                                focusedContainerColor = Color(0xFF0F0F1F),
+                                unfocusedContainerColor = Color(0xFF0D0D1A),
+                                cursorColor = PrimaryViolet
                             ),
                             modifier = Modifier
                                 .weight(1f)
@@ -557,9 +535,10 @@ fun ChatScreen(
                                 .size(44.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = if (messageText.isNotBlank()) listOf(NeonBlue, NeonCyan) else listOf(Color.Gray, Color.DarkGray)
-                                    )
+                                    brush = if (messageText.isNotBlank())
+                                        GradientButton
+                                    else
+                                        Brush.horizontalGradient(listOf(TextMuted, TextMuted))
                                 )
                         ) {
                             Icon(
@@ -679,32 +658,6 @@ fun ChatScreen(
             }
         }
 
-        // Dialog xác nhận xóa lịch sử trò chuyện
-        if (showClearHistoryDialog) {
-            AlertDialog(
-                onDismissRequest = { showClearHistoryDialog = false },
-                title = { Text("Xóa lịch sử trò chuyện", color = Color.White, fontWeight = FontWeight.Bold) },
-                text = { Text("Bạn có chắc chắn muốn xóa toàn bộ lịch sử tin nhắn của cuộc trò chuyện này? Hành động này sẽ xóa sạch tin nhắn ở cả hai phía và không thể khôi phục lại.", color = Color.White.copy(alpha = 0.8f)) },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            viewModel.clearChatHistory()
-                            showClearHistoryDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A))
-                    ) {
-                        Text("XÓA SẠCH", color = Color.White)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showClearHistoryDialog = false }) {
-                        Text("HỦY BỎ", color = Color.White.copy(alpha = 0.6f))
-                    }
-                },
-                containerColor = Color(0xFF1E293B),
-                shape = RoundedCornerShape(24.dp)
-            )
-        }
     }
 }
 
@@ -724,13 +677,12 @@ fun MessageBubble(
     onLongClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val bubbleColor = if (isMe) BubbleMeColor else BubbleOtherColor
     val alignment = if (isMe) Alignment.End else Alignment.Start
     
     val bubbleShape = if (isMe) {
-        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
+        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
     } else {
-        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
+        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp)
     }
 
     Column(
@@ -739,7 +691,7 @@ fun MessageBubble(
             .padding(vertical = 2.dp),
         horizontalAlignment = alignment
     ) {
-        // Tên người gửi phía trên mỗi tin nhắn trong nhóm chat
+        // Tên người gửi trong nhóm chat
         if (isGroup && !isMe && !message.isDeleted) {
             val senderProfile = groupMembers[message.senderId]
             val senderDisplayName = senderProfile?.displayName ?: message.senderName
@@ -747,21 +699,25 @@ fun MessageBubble(
                 text = senderDisplayName,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = NeonBlue,
+                color = PrimaryViolet,
                 modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
             )
         }
 
-        // Hộp chính của bong bóng tin nhắn, hỗ trợ cả Long Click
+        // Bong bóng tin nhắn
         Box(
             modifier = Modifier
                 .widthIn(max = 280.dp)
                 .clip(bubbleShape)
-                .background(bubbleColor)
+                .then(
+                    if (isMe) Modifier.background(brush = BubbleMeGrad)
+                    else Modifier.background(BubbleOtherBg)
+                )
                 .border(
                     BorderStroke(
-                        0.5.dp, 
-                        if (isMe) NeonCyan.copy(alpha = 0.4f) else GlassBorder.copy(alpha = 0.2f)
+                        0.5.dp,
+                        if (isMe) PrimaryViolet.copy(alpha = 0.5f)
+                        else BorderColor
                     ),
                     bubbleShape
                 )
@@ -787,7 +743,7 @@ fun MessageBubble(
                             modifier = Modifier
                                 .width(3.dp)
                                 .height(24.dp)
-                                .background(NeonBlue, RoundedCornerShape(2.dp))
+                                .background(PrimaryViolet, RoundedCornerShape(2.dp))
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
@@ -795,7 +751,7 @@ fun MessageBubble(
                                 text = if (message.replyTo.id.startsWith("bot_") || message.replyTo.id == "m1" || message.replyTo.id == "m3") partnerName else "Bạn",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = NeonBlue
+                                color = PrimaryViolet
                             )
                             Text(
                                 text = message.replyTo.content,

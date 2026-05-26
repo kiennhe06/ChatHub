@@ -169,16 +169,26 @@ class ChatRepositoryImpl @Inject constructor(
                 } else {
                     launch {
                         val conversations = conversationsDto.map { dto ->
-                            val partnerId = dto.members.find { it != currentUserId } ?: ""
-                            val partnerUser = try {
-                                if (partnerId.isNotEmpty()) {
-                                    val userSnapshot = firestore.collection("users").document(partnerId).get().await()
-                                    userSnapshot.toObject(UserDto::class.java)?.toDomain()
-                                } else null
-                            } catch (e: Exception) {
+                            // Nhận diện nhóm chat: isGroup = true HOẶC có groupName/adminIds
+                            // (để xử lý document cũ chưa có field isGroup)
+                            val isGroupChat = dto.isGroup || dto.groupName.isNotEmpty() || dto.adminIds.isNotEmpty()
+                            val fixedDto = if (isGroupChat && !dto.isGroup) dto.copy(isGroup = true) else dto
+
+                            val partnerUser = if (isGroupChat) {
+                                // Nhóm chat: không cần tải thông tin partner user
                                 null
+                            } else {
+                                val partnerId = dto.members.find { it != currentUserId } ?: ""
+                                try {
+                                    if (partnerId.isNotEmpty()) {
+                                        val userSnapshot = firestore.collection("users").document(partnerId).get().await()
+                                        userSnapshot.toObject(UserDto::class.java)?.toDomain()
+                                    } else null
+                                } catch (e: Exception) {
+                                    null
+                                }
                             }
-                            dto.toDomain(currentUserId, partnerUser)
+                            fixedDto.toDomain(currentUserId, partnerUser)
                         }
                         trySend(conversations.sortedByDescending { it.lastMessageTime })
                     }
@@ -615,6 +625,32 @@ class ChatRepositoryImpl @Inject constructor(
             localGroupsMap[groupId] = conversation
             Result.success(groupId)
         }
+    }
+
+    override suspend fun deleteConversation(conversationId: String): Result<Unit> = Result.runCatching {
+        try {
+            // Xóa subcollection messages trước
+            val messagesSnapshot = firestore.collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .get()
+                .await()
+            
+            firestore.runBatch { batch ->
+                messagesSnapshot.documents.forEach { doc ->
+                    batch.delete(doc.reference)
+                }
+            }.await()
+
+            // Xóa document cuộc trò chuyện chính
+            firestore.collection("conversations")
+                .document(conversationId)
+                .delete()
+                .await()
+        } catch (e: Exception) {
+            // Bỏ qua lỗi hoặc lưu offline
+        }
+        localGroupsMap.remove(conversationId)
     }
 
     override fun getGroupInfo(groupId: String): Flow<Conversation?> = callbackFlow {
