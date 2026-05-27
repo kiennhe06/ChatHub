@@ -58,6 +58,12 @@
             </intent-filter>
         </service>
         
+        <!-- Khai báo CallInviteActivity của ZegoCloud với theme AppCompat để tránh crash -->
+        <activity
+            android:name="com.zegocloud.uikit.prebuilt.call.invite.internal.CallInviteActivity"
+            android:theme="@style/Theme.ChatHub.ZegoCall"
+            tools:node="merge" />
+        
     </application>
 
 </manifest>

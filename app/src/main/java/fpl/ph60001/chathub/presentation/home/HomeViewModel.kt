@@ -13,12 +13,17 @@ import fpl.ph60001.chathub.domain.usecase.GetConversationsUseCase
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.google.firebase.messaging.FirebaseMessaging
+import android.app.Application
+import com.zegocloud.uikit.prebuilt.call.invite.ZegoUIKitPrebuiltCallInvitationConfig
+import com.zegocloud.uikit.prebuilt.call.invite.ZegoUIKitPrebuiltCallInvitationService
 
 /**
  * Lớp ViewModel quản lý danh sách cuộc hội thoại, danh sách bạn bè, lời mời kết bạn và xử lý đăng xuất tại Trang chủ.
  */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    private val application: Application,
     private val authRepository: AuthRepository,
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
@@ -56,8 +61,43 @@ class HomeViewModel @Inject constructor(
     val currentUserId: String
         get() = authRepository.getCurrentUser()?.uid ?: "demo_user_uid"
 
+    private var isZegoInitialized = false
+
     init {
         loadData()
+        fetchAndSaveFcmToken()
+    }
+    
+    private fun initZegoCloud(user: User) {
+        if (isZegoInitialized) return
+        val appID: Long = 889575180
+        val appSign = "5718908f2cf0eb98c71fdfc496f5bfa801302094dec5587f2d060abc2b86542e"
+        val callInvitationConfig = ZegoUIKitPrebuiltCallInvitationConfig()
+        
+        // Đảm bảo userName không bị rỗng, nếu không ZIM SDK sẽ báo PARAM_INVALID
+        val userName = if (user.displayName.isNullOrBlank() || user.displayName == "Thành viên ChatHub") {
+            "User_${user.uid.take(5)}"
+        } else {
+            user.displayName
+        }
+        
+        ZegoUIKitPrebuiltCallInvitationService.init(
+            application,
+            appID,
+            appSign,
+            user.uid,
+            userName,
+            callInvitationConfig
+        )
+        isZegoInitialized = true
+    }
+    
+    private fun fetchAndSaveFcmToken() {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            viewModelScope.launch {
+                authRepository.updateFcmToken(token)
+            }
+        }
     }
 
     private fun loadData() {
@@ -67,6 +107,16 @@ class HomeViewModel @Inject constructor(
         val user = authRepository.getCurrentUser()
         _currentUser.value = user
         val uid = user?.uid ?: "demo_user_uid"
+
+        // Lắng nghe realtime thông tin người dùng hiện tại từ Firestore để lấy tên thật
+        viewModelScope.launch {
+            authRepository.observeCurrentUser().collect { updatedUser ->
+                if (updatedUser != null) {
+                    _currentUser.value = updatedUser
+                    initZegoCloud(updatedUser)
+                }
+            }
+        }
 
         // Lắng nghe realtime danh sách các cuộc hội thoại
         viewModelScope.launch {
@@ -128,6 +178,7 @@ class HomeViewModel @Inject constructor(
     fun logout() {
         viewModelScope.launch {
             authRepository.logout()
+            ZegoUIKitPrebuiltCallInvitationService.unInit()
             _isLoggedOut.value = true
         }
     }

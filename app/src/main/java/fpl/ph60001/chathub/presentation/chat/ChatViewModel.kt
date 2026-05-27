@@ -88,6 +88,14 @@ class ChatViewModel @Inject constructor(
     private val _uploadError = MutableStateFlow<String?>(null)
     val uploadError: StateFlow<String?> = _uploadError.asStateFlow()
 
+    // Chế độ Tin nhắn bí mật (Vanish Mode)
+    private val _isSecretMode = MutableStateFlow(false)
+    val isSecretMode: StateFlow<Boolean> = _isSecretMode.asStateFlow()
+
+    fun toggleSecretMode() {
+        _isSecretMode.value = !_isSecretMode.value
+    }
+
     // Luồng tin nhắn realtime kết nối với UseCase
     val messagesList: StateFlow<List<Message>> = getMessagesUseCase(conversationId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -196,7 +204,8 @@ class ChatViewModel @Inject constructor(
             timestamp = System.currentTimeMillis(),
             type = "text",
             seenBy = listOf(currentUserUid),
-            replyTo = replyToModel
+            replyTo = replyToModel,
+            isSecret = _isSecretMode.value
         )
 
         // Reset ô nhập chữ và reply ngay lập tức tạo cảm giác mượt mà tức thì
@@ -414,6 +423,27 @@ class ChatViewModel @Inject constructor(
      */
     private fun getRoomKey(uid1: String, uid2: String): String {
         return if (uid1 < uid2) "${uid1}_${uid2}" else "${uid2}_${uid1}"
+    }
+
+    /**
+     * Gửi tin nhắn log cuộc gọi vào cuộc trò chuyện.
+     * @param isVideoCall true nếu là cuộc gọi video, false nếu là gọi thoại.
+     */
+    fun sendCallLogMessage(isVideoCall: Boolean) {
+        val callType = if (isVideoCall) "📹 Cuộc gọi video" else "📞 Cuộc gọi thoại"
+        val callMessage = Message(
+            senderId = currentUserUid,
+            senderName = currentUserName,
+            receiverId = partnerId,
+            content = callType,
+            timestamp = System.currentTimeMillis(),
+            type = "call",
+            seenBy = listOf(currentUserUid)
+        )
+
+        viewModelScope.launch {
+            sendMessageUseCase(conversationId, callMessage)
+        }
     }
 
     override fun onCleared() {

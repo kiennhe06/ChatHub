@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "fpl.ph60001.chathub"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -77,6 +77,10 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.play.services.auth)
     implementation(libs.androidx.datastore.preferences)
+
+    // ZegoCloud Video Call
+    implementation("com.github.ZEGOCLOUD:zego_uikit_prebuilt_call_android:3.9.5")
+    implementation("androidx.appcompat:appcompat:1.6.1")
     
     // Testing
     testImplementation(libs.junit)

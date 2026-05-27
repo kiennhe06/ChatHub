@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.ChatHub" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.ChatHub" parent="Theme.MaterialComponents.Light.NoActionBar" />
+
+    <!-- Theme riêng cho ZegoCloud CallInviteActivity (yêu cầu AppCompat + MaterialComponents) -->
+    <style name="Theme.ChatHub.ZegoCall" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
 </resources>

@@ -40,5 +40,6 @@ data class Message(
     val mediaUrl: String = "",
     val fileName: String = "",
     val fileSize: Long = 0L,
-    val duration: Long = 0L
+    val duration: Long = 0L,
+    val isSecret: Boolean = false
 )

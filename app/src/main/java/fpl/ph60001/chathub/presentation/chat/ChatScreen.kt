@@ -44,6 +44,10 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
+import androidx.compose.ui.viewinterop.AndroidView
+import com.zegocloud.uikit.prebuilt.call.invite.widget.ZegoSendCallInvitationButton
+import com.zegocloud.uikit.service.defines.ZegoUIKitUser
+
 import fpl.ph60001.chathub.ui.theme.*
 
 // Alias cho ChatScreen
@@ -66,6 +70,7 @@ fun ChatScreen(
     val isPartnerTyping by viewModel.isPartnerTyping.collectAsState()
     val replyingTo by viewModel.replyingTo.collectAsState()
     val editingMessage by viewModel.editingMessage.collectAsState()
+    val isSecretMode by viewModel.isSecretMode.collectAsState()
     
     val uploadProgress by viewModel.uploadProgress.collectAsState()
     val isUploading by viewModel.isUploading.collectAsState()
@@ -260,17 +265,71 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        // Nút Gọi Thoại bằng ZegoCloud (Cái 1)
+                        if (!viewModel.isGroup) {
+                            AndroidView<ZegoSendCallInvitationButton>(
+                                factory = { ctx ->
+                                    ZegoSendCallInvitationButton(ctx).apply {
+                                        setIsVideoCall(false)
+                                        setInvitees(listOf(ZegoUIKitUser(viewModel.partnerId, viewModel.partnerName)))
+                                        // Ghi log cuộc gọi thoại vào chat khi bấm
+                                        setOnTouchListener { _, event ->
+                                            if (event.action == android.view.MotionEvent.ACTION_UP) {
+                                                viewModel.sendCallLogMessage(false)
+                                            }
+                                            false // Không chặn event, để ZegoCloud vẫn xử lý gọi bình thường
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(40.dp).padding(4.dp)
+                            )
+
+                            // Nút Gọi Video bằng ZegoCloud
+                            AndroidView<ZegoSendCallInvitationButton>(
+                                factory = { ctx ->
+                                    ZegoSendCallInvitationButton(ctx).apply {
+                                        setIsVideoCall(true)
+                                        setInvitees(listOf(ZegoUIKitUser(viewModel.partnerId, viewModel.partnerName)))
+                                        // Ghi log cuộc gọi video vào chat khi bấm
+                                        setOnTouchListener { _, event ->
+                                            if (event.action == android.view.MotionEvent.ACTION_UP) {
+                                                viewModel.sendCallLogMessage(true)
+                                            }
+                                            false
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(40.dp).padding(4.dp)
+                            )
+                        }
+
+                        // Nút Vanish Mode / Secret Chat (Cái 2)
+                        IconButton(
+                            onClick = {
+                                viewModel.toggleSecretMode()
+                                val msg = if (!isSecretMode) "🔥 Đã BẬT Tin nhắn tự hủy (10s)" else "Đã TẮT Tin nhắn tự hủy"
+                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = if (isSecretMode) Modifier
+                                .clip(CircleShape)
+                                .background(AccentPink.copy(alpha = 0.2f))
+                            else Modifier
+                        ) {
+                            Icon(
+                                imageVector = if (isSecretMode) Icons.Default.LocalFireDepartment else Icons.Default.Visibility,
+                                contentDescription = "Tin nhắn tự hủy",
+                                tint = if (isSecretMode) AccentPink else PrimaryViolet
+                            )
+                        }
+
                         if (viewModel.isGroup) {
                             IconButton(
-                                onClick = { onNavigateToGroupInfo(viewModel.partnerId) },
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.08f))
+                                onClick = { onNavigateToGroupInfo(viewModel.partnerId) }
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "Thông tin nhóm",
-                                    tint = NeonBlue
+                                    tint = PrimaryViolet
                                 )
                             }
                         }
@@ -286,6 +345,7 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .imePadding()
             ) {
                 // KHU VỰC 1: DANH SÁCH TIN NHẮN REALTIME
                 LazyColumn(
@@ -304,6 +364,14 @@ fun ChatScreen(
                         if (!isMe && !message.seenBy.contains(viewModel.currentUserUid)) {
                             LaunchedEffect(message.messageId) {
                                 viewModel.markMessageAsSeen(message.messageId)
+                            }
+                        }
+
+                        // Tính năng Tin nhắn tự hủy (Cái 2): Tự động xóa sau 60 giây khi hiển thị
+                        if (message.isSecret && !message.isDeleted) {
+                            LaunchedEffect(message.messageId) {
+                                kotlinx.coroutines.delay(60000) // Đếm ngược 60s
+                                viewModel.deleteMessagePermanently(message.messageId)
                             }
                         }
 
@@ -715,8 +783,9 @@ fun MessageBubble(
                 )
                 .border(
                     BorderStroke(
-                        0.5.dp,
-                        if (isMe) PrimaryViolet.copy(alpha = 0.5f)
+                        if (message.isSecret) 1.5.dp else 0.5.dp,
+                        if (message.isSecret) AccentPink.copy(alpha = 0.8f)
+                        else if (isMe) PrimaryViolet.copy(alpha = 0.5f)
                         else BorderColor
                     ),
                     bubbleShape

@@ -46,7 +46,9 @@ data class MessageDto(
     val mediaUrl: String = "",
     val fileName: String = "",
     val fileSize: Long = 0L,
-    val duration: Long = 0L
+    val duration: Long = 0L,
+    @field:JvmField
+    val isSecret: Boolean = false
 ) {
     /**
      * Chuyển đổi DTO thành Business Model trong lớp Domain.
@@ -70,7 +72,8 @@ data class MessageDto(
             mediaUrl = mediaUrl,
             fileName = fileName,
             fileSize = fileSize,
-            duration = duration
+            duration = duration,
+            isSecret = isSecret
         )
     }
 
@@ -97,7 +100,8 @@ data class MessageDto(
                 mediaUrl = message.mediaUrl,
                 fileName = message.fileName,
                 fileSize = message.fileSize,
-                duration = message.duration
+                duration = message.duration,
+                isSecret = message.isSecret
             )
         }
     }
